@@ -1,0 +1,21 @@
+# Data handling
+pandas
+numpy
+
+# Visualisation
+matplotlib
+seaborn
+
+# Machine learning and model persistence
+scikit-learn
+joblib
+
+# Web app
+streamlit
+
+# Data collection and configuration
+requests
+python-dotenv
+
+# Testing
+pytest

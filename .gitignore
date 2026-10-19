@@ -1,0 +1,15 @@
+# Virtual environment
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Tool caches
+.pytest_cache/
+
+# Trained models (rebuilt by training, not stored in git)
+models/*.joblib
