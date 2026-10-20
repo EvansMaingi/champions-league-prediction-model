@@ -7,9 +7,9 @@ machine learning by building it. Understanding matters more than speed.
 Full specification: docs/PROJECT_SPEC.md (read it when starting a new milestone).
 
 ## Current progress
-Current milestone: 1 — Environment setup and scaffolding
+Current milestone: 2 — Data collection
 
-- [ ] 1. Environment setup, scaffolding, GitHub repo
+- [x] 1. Environment setup, scaffolding, GitHub repo
 - [ ] 2. Data collection (verify sources, licensing, collect.py)
 - [ ] 3. Exploratory data analysis
 - [ ] 4. Target definition (result: H / D / A)
