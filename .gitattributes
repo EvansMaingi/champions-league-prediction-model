@@ -1,0 +1,3 @@
+# Raw data must stay byte-for-byte as downloaded (SHA-256 hashes in the download
+# logs depend on it), so Git must never convert its line endings.
+data/raw/** -text
