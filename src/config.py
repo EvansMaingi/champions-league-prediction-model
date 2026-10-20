@@ -36,3 +36,10 @@ OPENFOOTBALL_RAW_DIR: Path = RAW_DATA_DIR / "openfootball"
 
 # Seasons verified to exist in the repository (2011-12 to 2025-26).
 HISTORICAL_SEASONS: list[str] = [f"{y}-{str(y + 1)[-2:]}" for y in range(2011, 2026)]
+
+# Current-season fixtures: football-data.org API (free plan: current season only,
+# 10 requests/minute). No published redistribution terms, so this folder is git-ignored.
+FOOTBALL_DATA_BASE_URL: str = "https://api.football-data.org/v4"
+FOOTBALL_DATA_RAW_DIR: Path = RAW_DATA_DIR / "football_data_org"
+FOOTBALL_DATA_KEY_VAR: str = "FOOTBALL_DATA_API_KEY"  # name of the variable in .env
+ENV_FILE: Path = PROJECT_ROOT / ".env"

@@ -5,29 +5,42 @@ Phase: Milestone 2 - Data collection.
 Previous stage: none. This is the entry point of the pipeline.
 Next stage: clean.py parses the files written here into a match table.
 
-Historical results come from openfootball/champions-league (CC0-1.0 public domain),
-one Football.TXT file per season. Files are saved byte-for-byte as downloaded and
-never edited. Every download is recorded in a log (URL, UTC timestamp, size, SHA-256)
-so each file can be traced back to its source and checked for later changes.
+Two sources:
+- Historical results: openfootball/champions-league (CC0-1.0 public domain), one
+  Football.TXT file per season, committed to git.
+- Current-season fixtures: football-data.org API (free plan). Each fetch is saved as a
+  new timestamped snapshot, because fixtures change; the folder is git-ignored because
+  the provider publishes no redistribution terms.
 
-Run from the project root:  python -m src.data.collect
+Files are saved byte-for-byte as downloaded and never edited. Every download is
+recorded in a log (URL, UTC timestamp, size, SHA-256) so each file can be traced back
+to its source and checked for later changes. API keys never appear in logs or output.
 
-TODO (Part C, current-season fixtures from football-data.org):
-- load_api_key(var_name: str) -> str
-    Read a key from the environment (.env); raise a clear error if it is missing.
-- fetch_fixtures(api_key: str) -> dict
-    Request the current season's matches; saved to a git-ignored folder.
+Run from the project root:
+    python -m src.data.collect             # historical seasons (default)
+    python -m src.data.collect fixtures    # one current-season fixture snapshot
 """
 
+import argparse
 import csv
 import hashlib
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
-from src.config import HISTORICAL_SEASONS, OPENFOOTBALL_BASE_URL, OPENFOOTBALL_RAW_DIR
+from src.config import (
+    ENV_FILE,
+    FOOTBALL_DATA_BASE_URL,
+    FOOTBALL_DATA_KEY_VAR,
+    FOOTBALL_DATA_RAW_DIR,
+    HISTORICAL_SEASONS,
+    OPENFOOTBALL_BASE_URL,
+    OPENFOOTBALL_RAW_DIR,
+)
 
 SEASON_PATTERN = re.compile(r"^\d{4}-\d{2}$")  # e.g. "2025-26"
 LOG_FILENAME = "download_log.csv"
@@ -51,9 +64,9 @@ def build_season_url(season: str) -> str:
     return f"{OPENFOOTBALL_BASE_URL}/{season}/cl.txt"
 
 
-def download_bytes(url: str, timeout: int = 30) -> bytes:
-    """Download a URL and return its raw bytes; raise on HTTP errors (e.g. 404)."""
-    response = requests.get(url, timeout=timeout)
+def download_bytes(url: str, headers: dict[str, str] | None = None, timeout: int = 30) -> bytes:
+    """Download a URL and return its raw bytes; raise on HTTP errors (e.g. 403, 404)."""
+    response = requests.get(url, headers=headers, timeout=timeout)
     response.raise_for_status()
     return response.content
 
@@ -66,6 +79,26 @@ def append_log_row(log_path: Path, row: dict[str, str | int]) -> None:
         if is_new:
             writer.writeheader()
         writer.writerow(row)
+
+
+def save_and_log(content: bytes, path: Path, season: str, url: str, now: datetime) -> Path:
+    """Write content to path unchanged and append its record to the folder's log."""
+    path.write_bytes(content)  # bytes, not text: no encoding or line-ending changes
+    append_log_row(
+        path.parent / LOG_FILENAME,
+        {
+            "season": season,
+            "url": url,
+            "file": path.name,
+            "bytes": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "downloaded_at_utc": now.isoformat(timespec="seconds"),
+        },
+    )
+    return path
+
+
+# --- Historical results (openfootball) --------------------------------------
 
 
 def collect_season(season: str, out_dir: Path, overwrite: bool = False) -> Path:
@@ -84,21 +117,8 @@ def collect_season(season: str, out_dir: Path, overwrite: bool = False) -> Path:
     path = out_dir / f"{season}_cl.txt"
     if path.exists() and not overwrite:
         return path
-
     content = download_bytes(url)
-    path.write_bytes(content)  # bytes, not text: no encoding or line-ending changes
-    append_log_row(
-        out_dir / LOG_FILENAME,
-        {
-            "season": season,
-            "url": url,
-            "file": path.name,
-            "bytes": len(content),
-            "sha256": hashlib.sha256(content).hexdigest(),
-            "downloaded_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-    )
-    return path
+    return save_and_log(content, path, season, url, datetime.now(timezone.utc))
 
 
 def collect_seasons(
@@ -110,6 +130,73 @@ def collect_seasons(
     return [collect_season(season, out_dir, overwrite) for season in seasons]
 
 
+# --- Current-season fixtures (football-data.org) -----------------------------
+
+
+def load_api_key(var_name: str = FOOTBALL_DATA_KEY_VAR, env_file: Path = ENV_FILE) -> str:
+    """Return an API key from the environment, loading .env first if it exists.
+
+    Raises:
+        RuntimeError: If the variable is missing or empty, with instructions to fix it.
+    """
+    load_dotenv(env_file)
+    key = os.getenv(var_name, "").strip()
+    if not key:
+        raise RuntimeError(
+            f"{var_name} is not set. Add the line '{var_name}=<your token>' to {env_file} "
+            "(see .env.example)."
+        )
+    return key
+
+
+def fixtures_url(competition: str = "CL") -> str:
+    """Return the football-data.org URL for a competition's current-season matches."""
+    return f"{FOOTBALL_DATA_BASE_URL}/competitions/{competition}/matches"
+
+
+def collect_fixtures(
+    api_key: str,
+    out_dir: Path = FOOTBALL_DATA_RAW_DIR,
+    now: datetime | None = None,
+) -> Path:
+    """Fetch current-season matches and save them as a new timestamped JSON snapshot.
+
+    Args:
+        api_key: football-data.org token; sent only in the X-Auth-Token header.
+        out_dir: Folder for snapshots (created if missing; git-ignored).
+        now: UTC fetch time (defaults to the real clock; tests pass a fixed time).
+
+    Returns:
+        Path of the snapshot, e.g. out_dir / "cl_matches_20261020T170600Z.json".
+
+    Raises:
+        FileExistsError: If a snapshot with the same timestamp exists; never overwritten.
+    """
+    now = now or datetime.now(timezone.utc)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"cl_matches_{now:%Y%m%dT%H%M%SZ}.json"
+    if path.exists():
+        raise FileExistsError(f"Snapshot already exists: {path}")
+    url = fixtures_url()
+    content = download_bytes(url, headers={"X-Auth-Token": api_key})
+    return save_and_log(content, path, "current", url, now)
+
+
+def main() -> None:
+    """Command-line entry point: collect historical seasons or a fixture snapshot."""
+    parser = argparse.ArgumentParser(description="Download raw Champions League data.")
+    parser.add_argument(
+        "source", nargs="?", default="historical", choices=["historical", "fixtures"]
+    )
+    args = parser.parse_args()
+
+    if args.source == "historical":
+        for saved in collect_seasons():
+            print(f"{saved.name}: {saved.stat().st_size:,} bytes")
+    else:
+        saved = collect_fixtures(load_api_key())
+        print(f"Saved snapshot {saved.name}: {saved.stat().st_size:,} bytes")
+
+
 if __name__ == "__main__":
-    for saved in collect_seasons():
-        print(f"{saved.name}: {saved.stat().st_size:,} bytes")
+    main()

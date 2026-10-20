@@ -128,7 +128,34 @@ pytest
 
 ## Data Sources and Licenses
 
-_To be completed (Milestone 2)._
+| Data | Source | Licence / terms | In this repo? |
+|---|---|---|---|
+| Historical results, 2011-12 to 2025-26 (1,997 matches) | [openfootball/champions-league](https://github.com/openfootball/champions-league) | [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain) | Yes: `data/raw/openfootball/` |
+| Current-season fixtures and results | [football-data.org](https://www.football-data.org) API, free plan | No published redistribution terms | No: fetched locally into `data/raw/football_data_org/` (git-ignored) |
+
+Thanks to the openfootball project for its public-domain data. Football data provided by
+the Football-Data.org API.
+
+**Collecting the data** (from the project root, with the virtual environment active):
+
+```bash
+python -m src.data.collect             # historical seasons (skips files already downloaded)
+python -m src.data.collect fixtures    # one timestamped snapshot of current-season fixtures
+```
+
+The fixtures command needs a free football-data.org token in `.env` (see `.env.example`).
+Raw files are saved unchanged, and each download is recorded in the folder's
+`download_log.csv` (URL, size, SHA-256 hash, UTC time).
+
+**Known limitations of the sources:**
+
+- openfootball is maintained by volunteers; scores will be spot-checked against a second
+  source during exploratory analysis.
+- The football-data.org free plan serves only the current season (past seasons return
+  HTTP 403), is limited to 10 requests per minute, and delays scores. Knockout fixtures
+  appear only once they are scheduled.
+- Team names differ between and within sources (e.g. "Bayern München" vs
+  "FC Bayern München") and are standardised during cleaning.
 
 ## Training the Model
 
