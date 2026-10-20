@@ -26,3 +26,13 @@ RANDOM_SEED: int = 42
 
 # Number of previous matches used for rolling "form" features.
 FORM_WINDOW: int = 5
+
+# --- Data sources ------------------------------------------------------------
+# Historical results: openfootball/champions-league (CC0-1.0 public domain).
+OPENFOOTBALL_BASE_URL: str = (
+    "https://raw.githubusercontent.com/openfootball/champions-league/master"
+)
+OPENFOOTBALL_RAW_DIR: Path = RAW_DATA_DIR / "openfootball"
+
+# Seasons verified to exist in the repository (2011-12 to 2025-26).
+HISTORICAL_SEASONS: list[str] = [f"{y}-{str(y + 1)[-2:]}" for y in range(2011, 2026)]

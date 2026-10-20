@@ -1,0 +1,16 @@
+season,url,file,bytes,sha256,downloaded_at_utc
+2011-12,https://raw.githubusercontent.com/openfootball/champions-league/master/2011-12/cl.txt,2011-12_cl.txt,10477,5820927a22fdf615d88120a50f770eeed2e2105daf9b0582963a5d67331b9060,2026-10-20T16:44:17+00:00
+2012-13,https://raw.githubusercontent.com/openfootball/champions-league/master/2012-13/cl.txt,2012-13_cl.txt,10400,1a60314a79ce760cc718eaab7cc5ab1d4f1534eeb788e19f0d102926988ccff5,2026-10-20T16:44:18+00:00
+2013-14,https://raw.githubusercontent.com/openfootball/champions-league/master/2013-14/cl.txt,2013-14_cl.txt,10476,94f5ad78f136f476075bfc2efa15e0993e7a3646b3cd6792bd5bbf43f990b2ad,2026-10-20T16:44:19+00:00
+2014-15,https://raw.githubusercontent.com/openfootball/champions-league/master/2014-15/cl.txt,2014-15_cl.txt,10454,d6d77f60e415ae5e61e1fdb274d61fe54d6525e2fa6bd7284e343c2e7deee479,2026-10-20T16:44:20+00:00
+2015-16,https://raw.githubusercontent.com/openfootball/champions-league/master/2015-16/cl.txt,2015-16_cl.txt,10471,09b7c605a6c723ffd85b9cb8a36f6bcf427485b9b0427b49014da22d455a8d8c,2026-10-20T16:44:22+00:00
+2016-17,https://raw.githubusercontent.com/openfootball/champions-league/master/2016-17/cl.txt,2016-17_cl.txt,10446,fe604207c9e945d2a76ed9d660b5499c4680d8b474aeeb166d585f819c029a31,2026-10-20T16:44:24+00:00
+2017-18,https://raw.githubusercontent.com/openfootball/champions-league/master/2017-18/cl.txt,2017-18_cl.txt,10389,5f022938be481f3f9fa88fa7580033aab631a9dd321170d2e7b7ee558c92e468,2026-10-20T16:44:25+00:00
+2018-19,https://raw.githubusercontent.com/openfootball/champions-league/master/2018-19/cl.txt,2018-19_cl.txt,10379,7ae98396b779c3e97d049e77bbd0af6dabedcecdd73fa17d27a212aadd18c727,2026-10-20T16:44:26+00:00
+2019-20,https://raw.githubusercontent.com/openfootball/champions-league/master/2019-20/cl.txt,2019-20_cl.txt,9967,e0f6d8990b3110108193eecdcd698dfa48b6f324ffa7532cdc11aea19f7ee419,2026-10-20T16:44:27+00:00
+2020-21,https://raw.githubusercontent.com/openfootball/champions-league/master/2020-21/cl.txt,2020-21_cl.txt,10495,9d94e40aa2fe2e98cbe5eedcffb7b9223daaaf3acf682411f4965f92a65d666e,2026-10-20T16:44:28+00:00
+2021-22,https://raw.githubusercontent.com/openfootball/champions-league/master/2021-22/cl.txt,2021-22_cl.txt,10428,36241f4479aa9efda62c62318366bbf36f84cc8719f6387c5747cb5dea7ec519,2026-10-20T16:44:29+00:00
+2022-23,https://raw.githubusercontent.com/openfootball/champions-league/master/2022-23/cl.txt,2022-23_cl.txt,10399,bf9cd05939b055f12ee9b095bec1c20a0922277bef8940172218548de2e7b93a,2026-10-20T16:44:31+00:00
+2023-24,https://raw.githubusercontent.com/openfootball/champions-league/master/2023-24/cl.txt,2023-24_cl.txt,10428,5872bee720b32410f28c5272fb7fe7b07aa0f66bcb31ffe157893d75c14c47c5,2026-10-20T16:44:32+00:00
+2024-25,https://raw.githubusercontent.com/openfootball/champions-league/master/2024-25/cl.txt,2024-25_cl.txt,15374,c2692b22af02c5df4587b69c5f430aebf7d936845b5337aee462ce8e649eb1b5,2026-10-20T16:44:33+00:00
+2025-26,https://raw.githubusercontent.com/openfootball/champions-league/master/2025-26/cl.txt,2025-26_cl.txt,15265,2b1877308587ff1004c21b8e961b9050b8754f968244e0635eb005040fd9d5cb,2026-10-20T16:44:34+00:00

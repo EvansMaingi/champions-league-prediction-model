@@ -11,5 +11,9 @@ __pycache__/
 # Tool caches
 .pytest_cache/
 
+# football-data.org API responses: no published redistribution terms, so kept local only.
+# (openfootball files in data/raw/openfootball/ are CC0 and are committed.)
+data/raw/football_data_org/
+
 # Trained models (rebuilt by training, not stored in git)
 models/*.joblib

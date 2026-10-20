@@ -149,3 +149,9 @@ _To be completed._
 ## Future Improvements
 
 _To be completed._
+
+Planned experiments:
+
+- **Older seasons vs era drift (Milestone 8):** test whether adding pre-2011 seasons
+  (e.g. engsoccerdata's European Cup data, non-commercial licence) improves validation
+  performance, or whether changes in the competition over time make old data harmful.
