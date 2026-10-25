@@ -200,3 +200,9 @@ Planned experiments:
 - **Older seasons vs era drift (Milestone 8):** test whether adding pre-2011 seasons
   (e.g. engsoccerdata's European Cup data, non-commercial licence) improves validation
   performance, or whether changes in the competition over time make old data harmful.
+- **Who qualifies (tie-level target):** predict which side advances from a knockout tie.
+  This is a different target from the match result: it depends on both legs, extra time,
+  penalties and, before 2021-22, the away goals rule.
+- **Mirrored neutral matches (Milestone 7):** at a neutral venue, swapping the two teams and
+  flipping H/A gives an equally valid example. If used, both copies of a match must stay in
+  the same train/validation/test split, or the model would be tested on a match it has seen.
