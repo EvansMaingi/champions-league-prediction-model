@@ -256,3 +256,73 @@ def test_part_a_features_are_registered_and_allowed():
     assert set(bf.FORM_FEATURES) <= set(bf.DERIVED_PRE_MATCH)
     produced = [c for c in bf.add_form_features(SEQUENCE).columns if c.startswith(("home_form", "away_form")) or c.endswith("has_history")]
     assert sorted(produced) == sorted(bf.FORM_FEATURES)
+
+
+# --- Part B: Elo rating -----------------------------------------------------------------
+
+def test_elo_expected_score_basics():
+    assert bf.elo_expected(1500, 1500) == 0.5
+    assert bf.elo_expected(1700, 1500) == pytest.approx(1 / (1 + 10 ** (-0.5)))  # 200 points: ~0.76
+    assert bf.elo_expected(1600, 1500) + bf.elo_expected(1500, 1600) == pytest.approx(1.0)
+    assert bf.elo_expected(1500, 1500, home_advantage=60) > 0.5
+
+
+def test_elo_records_rating_before_the_match_and_is_zero_sum():
+    df = bf.add_elo_features(SEQUENCE.iloc[:2])
+    assert (df.loc[0, "home_elo"], df.loc[0, "away_elo"]) == (1500.0, 1500.0)   # before any update
+    # Match 0: A (home, HFA 60) beat B. A gains K * (1 - E), B loses the same.
+    gain = bf.ELO_K * (1 - bf.elo_expected(1500, 1500, bf.ELO_HOME_ADVANTAGE))
+    assert df.loc[1, "away_elo"] == pytest.approx(1500 + gain)                    # A's rating before match 1
+    assert df.loc[0, "elo_diff"] == 0.0
+
+
+def test_elo_hand_worked_two_matches():
+    two = matches([("2020-21", "2020-10-01", "A", "B", 1, 0), ("2020-21", "2020-10-08", "B", "A", 1, 1)])
+    e1 = 1 / (1 + 10 ** ((1500 - 1560) / 400))                 # A at home: E = 0.5855
+    a, b = 1500 + 20 * (1 - e1), 1500 - 20 * (1 - e1)          # 1508.29, 1491.71
+    row = bf.add_elo_features(two).iloc[1]
+    assert (row["home_elo"], row["away_elo"]) == (pytest.approx(b), pytest.approx(a))
+    assert row["elo_diff"] == pytest.approx(b - a)
+
+
+def test_elo_no_home_advantage_at_neutral_or_abroad_venues():
+    one = matches([("2020-21", "2020-10-01", "A", "B", 1, 0), ("2020-21", "2020-10-08", "A", "C", 0, 0)])
+    neutral = one.assign(neutral_venue=[True, False], played_abroad=False)
+    gain_home = bf.add_elo_features(one).loc[1, "home_elo"] - 1500
+    gain_neutral = bf.add_elo_features(neutral).loc[1, "home_elo"] - 1500
+    assert gain_neutral == pytest.approx(20 * 0.5)               # E = 0.5 without home advantage
+    assert gain_home < gain_neutral                              # a home win was more expected
+
+
+def test_elo_regresses_toward_start_between_seasons():
+    two = matches([("2020-21", "2020-10-01", "A", "B", 1, 0), ("2021-22", "2021-09-14", "A", "B", 0, 0)])
+    after_first = 1500 + 20 * (1 - bf.elo_expected(1500, 1500, 60))
+    row = bf.add_elo_features(two).iloc[1]
+    assert row["home_elo"] == pytest.approx(after_first - (after_first - 1500) / 3)
+
+
+def test_elo_counts_rated_matches():
+    df = bf.add_elo_features(SEQUENCE)
+    assert df["home_elo_n"].tolist() == [0, 0, 2, 1, 4]   # A, C, A, B, A before each match
+    assert df["away_elo_n"].tolist() == [0, 1, 0, 3, 1]
+
+
+def test_elo_unchanged_when_later_matches_are_removed():
+    full = bf.add_elo_features(SEQUENCE)
+    cut = bf.add_elo_features(SEQUENCE[SEQUENCE["date"] < "2021-09-15"])
+    pd.testing.assert_frame_equal(full.loc[cut.index, bf.ELO_FEATURES], cut[bf.ELO_FEATURES])
+
+
+def test_elo_changing_a_score_only_affects_later_matches():
+    base = bf.add_elo_features(SEQUENCE)
+    changed = SEQUENCE.copy()
+    changed.loc[2, ["home_ft", "away_ft"]] = [0, 5]
+    after = bf.add_elo_features(changed)
+    pd.testing.assert_frame_equal(base.loc[:2, bf.ELO_FEATURES], after.loc[:2, bf.ELO_FEATURES])
+    assert not base.loc[3:, bf.ELO_FEATURES].equals(after.loc[3:, bf.ELO_FEATURES])
+
+
+def test_part_b_features_are_registered_and_allowed():
+    bf.assert_valid_features(bf.ELO_FEATURES, bf.ALLOWED_FEATURES)
+    produced = set(bf.add_elo_features(SEQUENCE).columns) - set(SEQUENCE.columns)
+    assert produced == set(bf.ELO_FEATURES)

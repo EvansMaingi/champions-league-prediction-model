@@ -41,9 +41,16 @@ match's score must not change its own or earlier features (catches a missing shi
 Note for Milestone 6: the data starts in 2011-12, so clubs' first matches that season
 look like cold starts although they had earlier CL history (left-censoring).
 
-TODO (Parts B and C):
-- Part B: Champions-League-only Elo, using the PRE-match rating.
-- Part C: context features; for a second leg, the first-leg score is legitimate
+Part B, strength rating (add_elo_features): a Champions-League-only Elo computed in
+kickoff order; the feature is each side's rating BEFORE the match (recorded before the
+update, the Elo equivalent of shift(1)). Unlike form, it accounts for opponent
+strength. Start 1500, K 20, home advantage 60 (0 at neutral or abroad venues), and 1/3
+regression toward 1500 between seasons, all fixed in advance; Milestone 7 may tune them
+on validation data only. Known limits (docs/data_notes.md): the rating scale needs about
+four seasons to spread out, and newcomers starting at 1500 are overrated.
+
+TODO (Part C):
+- Context features; for a second leg, the first-leg score is legitimate
   pre-match information (before 2021-22 the away goals rule applied, so "level after
   leg 1" meant more than goal difference).
 """
@@ -89,10 +96,12 @@ FORM_FEATURES: list[str] = [
     for side in ("home", "away")
     for name in ("form_points", "form_goals_for", "form_goals_against", "form_n", "form_n_season", "has_history")
 ]
-DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES]
+# Part B (add_elo_features): Champions-League-only Elo, the rating BEFORE kickoff.
+ELO_FEATURES: list[str] = ["home_elo", "away_elo", "elo_diff", "home_elo_n", "away_elo_n"]
+DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES, *ELO_FEATURES]
 
 # Allowlist of model inputs, declared part by part (Milestone 5).
-ALLOWED_FEATURES: list[str] = [*FORM_FEATURES]
+ALLOWED_FEATURES: list[str] = [*FORM_FEATURES, *ELO_FEATURES]
 
 COLUMN_ROLES: dict[str, str] = {
     **{column: "pre_match" for column in PRE_MATCH},
@@ -257,6 +266,68 @@ def add_form_features(df: pd.DataFrame, window: int = FORM_WINDOW, scope: FormSc
         part = part.rename(columns=lambda c: f"{side}_{c}")
         out = out.join(part)
         out[f"{side}_has_history"] = out[f"{side}_form_n"] > 0
+    return out
+
+
+# --- Part B: Champions-League-only Elo rating (Milestone 5) -------------------------
+
+ELO_START = 1500.0
+ELO_K = 20.0              # update size; fixed in advance, may be tuned on validation data only
+ELO_HOME_ADVANTAGE = 60.0  # rating points added to a home side that is really at home
+ELO_SEASON_REGRESSION = 1 / 3  # share of the distance to ELO_START removed between seasons
+
+
+def elo_expected(rating: float, opponent: float, home_advantage: float = 0.0) -> float:
+    """Expected score (win 1, draw 0.5, loss 0) of `rating` against `opponent`."""
+    return 1.0 / (1.0 + 10 ** ((opponent - (rating + home_advantage)) / 400.0))
+
+
+def add_elo_features(
+    df: pd.DataFrame,
+    k: float = ELO_K,
+    home_advantage: float = ELO_HOME_ADVANTAGE,
+    season_regression: float = ELO_SEASON_REGRESSION,
+    start: float = ELO_START,
+) -> pd.DataFrame:
+    """Add each side's Elo rating BEFORE kickoff, computed sequentially over CL matches.
+
+    For each match in kickoff order: record both pre-match ratings, then update them from
+    the 90-minute result. Home advantage applies only when the home side is really at
+    home (not neutral_venue, not played_abroad). When a new season starts, every rating
+    moves `season_regression` of the way back to `start`. A team's first ever match uses
+    `start`; *_elo_n (matches rated before this one) shows how established a rating is.
+
+    Adds: home_elo, away_elo, elo_diff (home - away, without home advantage),
+    home_elo_n, away_elo_n.
+    """
+    order = df.sort_values(["kickoff_utc"], kind="stable").index
+    ratings: dict[str, float] = {}
+    played: dict[str, int] = {}
+    pre = {name: pd.Series(index=df.index, dtype=float) for name in ("home_elo", "away_elo", "home_elo_n", "away_elo_n")}
+    season = None
+
+    for index in order:
+        row = df.loc[index]
+        if row["season"] != season:
+            if season is not None:  # summer break: regress every rating toward the mean
+                ratings = {team: r - season_regression * (r - start) for team, r in ratings.items()}
+            season = row["season"]
+        home, away = row["home_team"], row["away_team"]
+        r_home, r_away = ratings.get(home, start), ratings.get(away, start)
+        pre["home_elo"][index], pre["away_elo"][index] = r_home, r_away
+        pre["home_elo_n"][index], pre["away_elo_n"][index] = played.get(home, 0), played.get(away, 0)
+
+        really_home = not (row.get("neutral_venue", False) or row.get("played_abroad", False))
+        expected = elo_expected(r_home, r_away, home_advantage if really_home else 0.0)
+        actual = 1.0 if row["home_ft"] > row["away_ft"] else 0.5 if row["home_ft"] == row["away_ft"] else 0.0
+        change = k * (actual - expected)
+        ratings[home], ratings[away] = r_home + change, r_away - change
+        played[home], played[away] = played.get(home, 0) + 1, played.get(away, 0) + 1
+
+    out = df.copy()
+    for name, values in pre.items():
+        out[name] = values.astype(int) if name.endswith("_n") else values
+    out["elo_diff"] = out["home_elo"] - out["away_elo"]
     return out
 
 

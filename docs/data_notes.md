@@ -192,6 +192,34 @@ Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
   leaky no-shift version passes the truncation test but correlates 0.565 with its own
   match's points (honest version: 0.197), so both tests are needed.
 
+### Part B: Elo rating (`build_features.add_elo_features`)
+
+- Champions-League-only Elo in kickoff order; features are the ratings **before** each
+  match: `home_elo`, `away_elo`, `elo_diff` (home minus away), `home_elo_n`, `away_elo_n`
+  (matches rated before this one). Expected score
+  E = 1 / (1 + 10^((R_away - (R_home + HFA)) / 400)); update R += K (S - E), zero-sum.
+- Parameters fixed in advance, not fitted to the data: start 1500, K 20, home advantage 60
+  (0 when `neutral_venue` or `played_abroad`), and ratings move 1/3 of the way back to 1500
+  between seasons. Milestone 7 may tune them on training/validation seasons only.
+- Distribution: ratings 1,419 to 1,641 (sd 39); `elo_diff` -164 to +170; no missing values
+  (a newcomer's rating is the 1500 default; `*_elo_n` = 0 and `*_has_history` show that).
+- Leakage tests: truncation at 3 cut-offs identical; perturbing one score changes only the
+  2 later matches involving those teams.
+- **Burn-in:** end-of-season rating spread (sd) 30.4 in 2011-12, 36.1, 41.7, 44.2, then
+  47.0 by 2015-16 and 47-52 afterwards. Rank order settles faster: Spearman correlation of
+  consecutive end-of-season ratings 0.68 for 2011-12 -> 2012-13, then 0.81-0.93. So after
+  the 2011-12 warm-up the ordering is reasonable, but the scale is compressed until about
+  2015-16: an Elo gap means a little less in the early training seasons.
+- **Newcomers are overrated:** for the 76 clubs whose first season in the data is after
+  2011-12, Elo expected 0.473 points-share per match but they scored 0.360 (established
+  clubs: expected 0.505, actual 0.524). Starting at the pool average flatters small clubs.
+- Both findings were measured on all seasons, so they are **not** used to change the
+  parameters now. Possible fixes (higher K, a lower start for newcomers) are for
+  Milestone 7, chosen on training and validation seasons only.
+- External ratings (e.g. ClubElo, which also uses domestic matches) are an option, not
+  used until their licence and the timing of their dates (a rating published after a
+  match must never be used for it) have been checked.
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's
