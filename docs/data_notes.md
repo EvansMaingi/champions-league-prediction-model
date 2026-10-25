@@ -172,3 +172,35 @@ saves the table, then reloads it with `clean.load_clean_matches` and validates i
 
 Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
 `home_team_source` / `away_team_source`.
+
+## Features (Milestone 5)
+
+### Part A: recent form (`build_features.add_form_features`)
+
+- Per-team log (one row per team per match); `shift(1)` + rolling mean over the previous
+  `FORM_WINDOW` = 5 CL matches: `form_points`, `form_goals_for`, `form_goals_against`,
+  plus `form_n` (matches in the window) and `form_n_season` (how many are from this season).
+- **Across seasons: carry over** (option 3, chosen 2026-10-25). Compared with resetting each
+  season: 108 instead of 488 team-rows without history, and 22% instead of 100% of teams'
+  first matches of a season without history; correlation with that match's points 0.197
+  vs 0.190. Staleness is visible to the model through `form_n_season` (median gap before a
+  team's first match of a season: 279 days, within a season: 15).
+- **Cold start:** no history gives missing form values and `*_has_history = False`
+  (50 home and 58 away values = each of the 108 clubs' first CL match).
+- **Leakage tests:** truncation (removing later matches changes no earlier feature) and
+  perturbation (changing a score changes only later matches' features). A deliberately
+  leaky no-shift version passes the truncation test but correlates 0.565 with its own
+  match's points (honest version: 0.197), so both tests are needed.
+
+## Decisions for later milestones
+
+- **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's
+  first match that season looks like a cold start even when it had years of CL history
+  (left-censoring): 16 of the 84 matches with a side lacking history are in 2011-12, the
+  most of any season, and so are 16 of the 24 matches where *neither* side has history
+  (every other season has at most 2). Use 2011-12 to build
+  history (form, Elo) but exclude it from training and evaluation.
+- **Milestone 7: missing form values** (cold starts) are imputed inside the scikit-learn
+  Pipeline, fitted on training data only, and the `*_has_history` flags are kept so the
+  model knows a value was imputed. `HistGradientBoostingClassifier` handles NaN natively
+  and needs no imputation.

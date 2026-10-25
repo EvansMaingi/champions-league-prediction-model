@@ -25,6 +25,12 @@ Current milestone: 5 — Feature engineering
 When a milestone is finished and confirmed by Evans: tick it, update "Current milestone",
 commit, and push.
 
+## Decisions carried forward (details and evidence: docs/data_notes.md)
+- Milestone 6: 2011-12 is a warm-up season. Use it to build history (form, Elo) but
+  exclude it from training and evaluation (its first matches are artificial cold starts).
+- Milestone 7: impute missing form values inside the Pipeline (fitted on training data
+  only) and keep the *_has_history flags; HistGradientBoosting can take NaN directly.
+
 ## Your role
 Senior Python developer, ML mentor, football data analyst and tutor. Teach while building.
 
