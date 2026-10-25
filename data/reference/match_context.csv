@@ -1,0 +1,143 @@
+season,date,home_team,away_team,neutral_venue,neutral_reason,neutral_evidence,behind_closed_doors,bcd_evidence,stadium,attendance,note,wikipedia_revid
+2011-12,2012-05-19,Bayern München,Chelsea FC,True,final,rule,False,,"Allianz Arena, Munich",62500,played at Bayern München's usual home stadium,1371171265
+2012-13,2013-05-25,Borussia Dortmund,Bayern München,True,final,rule,False,,"Wembley Stadium, London",86298,,1352352017
+2013-14,2014-05-24,Real Madrid,Atlético Madrid,True,final,rule,False,,"Estádio da Luz, Lisbon",60976,,1352009847
+2014-15,2014-09-30,CSKA Moskva,Bayern München,False,,,True,Wikipedia attendance = 0,"Arena Khimki, Khimki",0,,1380388853
+2014-15,2014-10-21,CSKA Moskva,Manchester City,False,,,True,Wikipedia attendance = 0,"Arena Khimki, Khimki",0,,1380388853
+2014-15,2014-11-25,CSKA Moskva,AS Roma,False,,,True,Wikipedia attendance = 0,"Arena Khimki, Khimki",0,,1380388853
+2014-15,2015-06-06,Juventus,FC Barcelona,True,final,rule,False,,"Olympiastadion, Berlin",70442,,1376277979
+2015-16,2016-05-28,Real Madrid,Atlético Madrid,True,final,rule,False,,"Stadio San Siro, Milan",71942,,1373353713
+2016-17,2016-11-02,Legia Warszawa,Real Madrid,False,,,True,Wikipedia attendance = 0,"Polish Army Stadium, Warsaw",0,,1376278761
+2016-17,2017-06-03,Juventus,Real Madrid,True,final,rule,False,,"Millennium Stadium, Cardiff",65842,,1373864667
+2017-18,2018-05-26,Real Madrid,Liverpool FC,True,final,rule,False,,"NSC Olimpiyskiy, Kyiv",61561,,1381607985
+2018-19,2018-10-02,Olympique Lyonnais,Shakhtar Donetsk,False,,,True,Wikipedia attendance = 0,"Parc Olympique Lyonnais, Décines-Charpieu",0,,1370542715
+2018-19,2019-06-01,Tottenham Hotspur,Liverpool FC,True,final,rule,False,,"Estadio Metropolitano, Madrid",63272,,1376279481
+2019-20,2020-03-10,Valencia CF,Atalanta,False,,,True,Wikipedia attendance = 0,"Mestalla, Valencia",0,,1376279652
+2019-20,2020-03-11,Paris Saint-Germain,Borussia Dortmund,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1376279652
+2019-20,2020-08-07,Manchester City,Real Madrid,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1376279652
+2019-20,2020-08-07,Juventus,Olympique Lyonnais,False,,,True,Wikipedia attendance = 0,"Juventus Stadium, Turin",0,,1376279652
+2019-20,2020-08-08,Bayern München,Chelsea FC,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1376279652
+2019-20,2020-08-08,FC Barcelona,SSC Napoli,False,,,True,Wikipedia attendance = 0,"Camp Nou, Barcelona",0,,1376279652
+2019-20,2020-08-12,Atalanta,Paris Saint-Germain,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio da Luz, Lisbon",0,,1376279652
+2019-20,2020-08-13,RB Leipzig,Atlético Madrid,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio José Alvalade, Lisbon",0,,1376279652
+2019-20,2020-08-14,FC Barcelona,Bayern München,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio da Luz, Lisbon",0,,1376279652
+2019-20,2020-08-15,Manchester City,Olympique Lyonnais,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio José Alvalade, Lisbon",0,,1376279652
+2019-20,2020-08-18,RB Leipzig,Paris Saint-Germain,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio da Luz, Lisbon",0,,1376279652
+2019-20,2020-08-19,Olympique Lyonnais,Bayern München,True,lisbon_final_8,rule,True,Wikipedia attendance = 0,"Estádio José Alvalade, Lisbon",0,,1376279652
+2019-20,2020-08-23,Paris Saint-Germain,Bayern München,True,final,rule,True,Wikipedia attendance = 0,"Estádio da Luz, Lisbon",0,,1376279695
+2020-21,2020-10-20,Chelsea FC,Sevilla FC,False,,,True,Wikipedia attendance = 0,"Stamford Bridge, London",0,,1371414121
+2020-21,2020-10-20,FC Barcelona,Ferencvárosi TC,False,,,True,Wikipedia attendance = 0,"Camp Nou, Barcelona",0,,1371414121
+2020-21,2020-10-20,Paris Saint-Germain,Manchester United,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414121
+2020-21,2020-10-21,Real Madrid,Shakhtar Donetsk,False,,,True,Wikipedia attendance = 0,"Alfredo di Stéfano, Madrid",0,,1371414121
+2020-21,2020-10-21,Bayern München,Atlético Madrid,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1371414121
+2020-21,2020-10-21,Manchester City,FC Porto,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1371414121
+2020-21,2020-10-21,Olympiakos Piraeus,Olympique Marseille,False,,,True,Wikipedia attendance = 0,"Karaiskakis Stadium, Piraeus",0,,1371414121
+2020-21,2020-10-21,AFC Ajax,Liverpool FC,False,,,True,Wikipedia attendance = 0,"Johan Cruyff Arena, Amsterdam",0,,1371414121
+2020-21,2020-10-27,Atlético Madrid,RB Salzburg,False,,,True,Wikipedia attendance = 0,"Metropolitano Stadium, Madrid",0,,1371414121
+2020-21,2020-10-27,Bor. Mönchengladbach,Real Madrid,False,,,True,Wikipedia attendance = 0,"Borussia-Park, Mönchengladbach",0,,1371414121
+2020-21,2020-10-27,Olympique Marseille,Manchester City,False,,,True,Wikipedia attendance = 0,"Stade Vélodrome, Marseille",0,,1371414121
+2020-21,2020-10-27,Atalanta,AFC Ajax,False,,,True,Wikipedia attendance = 0,"Stadio Atleti Azzurri d'Italia, Bergamo",0,,1371414121
+2020-21,2020-10-27,Liverpool FC,FC Midtjylland,False,,,True,Wikipedia attendance = 0,"Anfield, Liverpool",0,,1371414121
+2020-21,2020-10-28,Sevilla FC,Stade Rennais,False,,,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville",0,,1371414121
+2020-21,2020-10-28,Borussia Dortmund,Zenit St. Petersburg,False,,,True,Wikipedia attendance = 0,"Westfalenstadion, Dortmund",0,,1371414121
+2020-21,2020-10-28,Club Brugge KV,Lazio Roma,False,,,True,Wikipedia attendance = 0,"Jan Breydel Stadium, Bruges",0,,1371414121
+2020-21,2020-10-28,Juventus,FC Barcelona,False,,,True,Wikipedia attendance = 0,"Juventus Stadium, Turin",0,,1371414121
+2020-21,2020-11-03,Shakhtar Donetsk,Bor. Mönchengladbach,False,,,True,Wikipedia attendance = 0,"Olympic Stadium, Kyiv",0,,1371414121
+2020-21,2020-11-03,RB Salzburg,Bayern München,False,,,True,Wikipedia attendance = 0,"Stadion Wals-Siezenheim, Wals-Siezenheim",0,,1371414121
+2020-21,2020-11-03,Real Madrid,Inter,False,,,True,Wikipedia attendance = 0,"Alfredo di Stéfano, Madrid",0,,1371414121
+2020-21,2020-11-03,FC Porto,Olympique Marseille,False,,,True,Wikipedia attendance = 0,"Estádio do Dragão, Porto",0,,1371414121
+2020-21,2020-11-03,Manchester City,Olympiakos Piraeus,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1371414121
+2020-21,2020-11-03,Atalanta,Liverpool FC,False,,,True,Wikipedia attendance = 0,"Stadio Atleti Azzurri d'Italia, Bergamo",0,,1371414121
+2020-21,2020-11-04,Chelsea FC,Stade Rennais,False,,,True,Wikipedia attendance = 0,"Stamford Bridge, London",0,,1371414121
+2020-21,2020-11-04,Sevilla FC,FK Krasnodar,False,,,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville",0,,1371414121
+2020-21,2020-11-04,Club Brugge KV,Borussia Dortmund,False,,,True,Wikipedia attendance = 0,"Jan Breydel Stadium, Bruges",0,,1371414121
+2020-21,2020-11-04,FC Barcelona,Dinamo Kiev,False,,,True,Wikipedia attendance = 0,"Camp Nou, Barcelona",0,,1371414121
+2020-21,2020-11-04,RB Leipzig,Paris Saint-Germain,False,,,True,Wikipedia attendance = 0,"Red Bull Arena, Leipzig",0,,1371414121
+2020-21,2020-11-24,Stade Rennais,Chelsea FC,False,,,True,Wikipedia attendance = 0,"Roazhon Park, Rennes",0,,1371414121
+2020-21,2020-11-24,Borussia Dortmund,Club Brugge KV,False,,,True,Wikipedia attendance = 0,"Westfalenstadion, Dortmund",0,,1371414121
+2020-21,2020-11-24,Lazio Roma,Zenit St. Petersburg,False,,,True,Wikipedia attendance = 0,"Stadio Olimpico, Rome",0,,1371414121
+2020-21,2020-11-24,Dinamo Kiev,FC Barcelona,False,,,True,Wikipedia attendance = 0,"Olympic Stadium, Kyiv",0,,1371414121
+2020-21,2020-11-24,Juventus,Ferencvárosi TC,False,,,True,Wikipedia attendance = 0,"Juventus Stadium, Turin",0,,1371414121
+2020-21,2020-11-24,Paris Saint-Germain,RB Leipzig,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414121
+2020-21,2020-11-25,Bor. Mönchengladbach,Shakhtar Donetsk,False,,,True,Wikipedia attendance = 0,"Borussia-Park, Mönchengladbach",0,,1371414121
+2020-21,2020-11-25,Olympiakos Piraeus,Manchester City,False,,,True,Wikipedia attendance = 0,"Karaiskakis Stadium, Piraeus",0,,1371414121
+2020-21,2020-11-25,Atlético Madrid,Lokomotiv Moskva,False,,,True,Wikipedia attendance = 0,"Metropolitano Stadium, Madrid",0,,1371414121
+2020-21,2020-11-25,Bayern München,RB Salzburg,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1371414121
+2020-21,2020-11-25,Inter,Real Madrid,False,,,True,Wikipedia attendance = 0,"San Siro, Milan",0,,1371414121
+2020-21,2020-11-25,Olympique Marseille,FC Porto,False,,,True,Wikipedia attendance = 0,"Stade Vélodrome, Marseille",0,,1371414121
+2020-21,2020-11-25,AFC Ajax,FC Midtjylland,False,,,True,Wikipedia attendance = 0,"Johan Cruyff Arena, Amsterdam",0,,1371414121
+2020-21,2020-11-25,Liverpool FC,Atalanta,False,,,True,Wikipedia attendance = 0,"Anfield, Liverpool",0,,1371414121
+2020-21,2020-12-01,Shakhtar Donetsk,Real Madrid,False,,,True,Wikipedia attendance = 0,"Olympic Stadium, Kyiv",0,,1371414121
+2020-21,2020-12-01,Atlético Madrid,Bayern München,False,,,True,Wikipedia attendance = 0,"Metropolitano Stadium, Madrid",0,,1371414121
+2020-21,2020-12-01,Bor. Mönchengladbach,Inter,False,,,True,Wikipedia attendance = 0,"Borussia-Park, Mönchengladbach",0,,1371414121
+2020-21,2020-12-01,FC Porto,Manchester City,False,,,True,Wikipedia attendance = 0,"Estádio do Dragão, Porto",0,,1371414121
+2020-21,2020-12-01,Olympique Marseille,Olympiakos Piraeus,False,,,True,Wikipedia attendance = 0,"Stade Vélodrome, Marseille",0,,1371414121
+2020-21,2020-12-01,Atalanta,FC Midtjylland,False,,,True,Wikipedia attendance = 0,"Stadio Atleti Azzurri d'Italia, Bergamo",0,,1371414121
+2020-21,2020-12-01,Liverpool FC,AFC Ajax,False,,,True,Wikipedia attendance = 0,"Anfield, Liverpool",0,,1371414121
+2020-21,2020-12-02,İstanbul Başakşehir,RB Leipzig,False,,,True,Wikipedia attendance = 0,"Başakşehir Fatih Terim Stadium, Istanbul",0,,1371414121
+2020-21,2020-12-02,Sevilla FC,Chelsea FC,False,,,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville",0,,1371414121
+2020-21,2020-12-02,Borussia Dortmund,Lazio Roma,False,,,True,Wikipedia attendance = 0,"Westfalenstadion, Dortmund",0,,1371414121
+2020-21,2020-12-02,Club Brugge KV,Zenit St. Petersburg,False,,,True,Wikipedia attendance = 0,"Jan Breydel Stadium, Bruges",0,,1371414121
+2020-21,2020-12-02,Juventus,Dinamo Kiev,False,,,True,Wikipedia attendance = 0,"Juventus Stadium, Turin",0,,1371414121
+2020-21,2020-12-02,Ferencvárosi TC,FC Barcelona,False,,,True,Wikipedia attendance = 0,"Puskás Aréna, Budapest",0,,1371414121
+2020-21,2020-12-08,Lazio Roma,Club Brugge KV,False,,,True,Wikipedia attendance = 0,"Stadio Olimpico, Rome",0,,1371414121
+2020-21,2020-12-08,Stade Rennais,Sevilla FC,False,,,True,Wikipedia attendance = 0,"Roazhon Park, Rennes",0,,1371414121
+2020-21,2020-12-08,Dinamo Kiev,Ferencvárosi TC,False,,,True,Wikipedia attendance = 0,"Olympic Stadium, Kyiv",0,,1371414121
+2020-21,2020-12-08,FC Barcelona,Juventus,False,,,True,Wikipedia attendance = 0,"Camp Nou, Barcelona",0,,1371414121
+2020-21,2020-12-08,RB Leipzig,Manchester United,False,,,True,Wikipedia attendance = 0,"Red Bull Arena, Leipzig",0,,1371414121
+2020-21,2020-12-09,AFC Ajax,Atalanta,False,,,True,Wikipedia attendance = 0,"Johan Cruyff Arena, Amsterdam",0,,1371414121
+2020-21,2020-12-09,Paris Saint-Germain,İstanbul Başakşehir,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414121
+2020-21,2020-12-09,Bayern München,Lokomotiv Moskva,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1371414121
+2020-21,2020-12-09,RB Salzburg,Atlético Madrid,False,,,True,Wikipedia attendance = 0,"Stadion Wals-Siezenheim, Wals-Siezenheim",0,,1371414121
+2020-21,2020-12-09,Inter,Shakhtar Donetsk,False,,,True,Wikipedia attendance = 0,"San Siro, Milan",0,,1371414121
+2020-21,2020-12-09,Real Madrid,Bor. Mönchengladbach,False,,,True,Wikipedia attendance = 0,"Alfredo di Stéfano, Madrid",0,,1371414121
+2020-21,2020-12-09,Manchester City,Olympique Marseille,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1371414121
+2020-21,2020-12-09,Olympiakos Piraeus,FC Porto,False,,,True,Wikipedia attendance = 0,"Karaiskakis Stadium, Piraeus",0,,1371414121
+2020-21,2021-02-16,RB Leipzig,Liverpool FC,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Puskás Aréna, Budapest, Hungary",0,,1371414085
+2020-21,2021-02-16,FC Barcelona,Paris Saint-Germain,False,,,True,Wikipedia attendance = 0,"Camp Nou, Barcelona",0,,1371414085
+2020-21,2021-02-17,FC Porto,Juventus,False,,,True,Wikipedia attendance = 0,"Estádio do Dragão, Porto",0,,1371414085
+2020-21,2021-02-17,Sevilla FC,Borussia Dortmund,False,,,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville",0,,1371414085
+2020-21,2021-02-23,Lazio Roma,Bayern München,False,,,True,Wikipedia attendance = 0,"Stadio Olimpico, Rome",0,,1371414085
+2020-21,2021-02-23,Atlético Madrid,Chelsea FC,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Arena Națională, Bucharest, Romania",0,,1371414085
+2020-21,2021-02-24,Bor. Mönchengladbach,Manchester City,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Puskás Aréna, Budapest, Hungary",0,,1371414085
+2020-21,2021-02-24,Atalanta,Real Madrid,False,,,True,Wikipedia attendance = 0,"Stadio Atleti Azzurri d'Italia, Bergamo",0,,1371414085
+2020-21,2021-03-09,Juventus,FC Porto,False,,,True,Wikipedia attendance = 0,"Juventus Stadium, Turin",0,,1371414085
+2020-21,2021-03-09,Borussia Dortmund,Sevilla FC,False,,,True,Wikipedia attendance = 0,"Westfalenstadion, Dortmund",0,,1371414085
+2020-21,2021-03-10,Liverpool FC,RB Leipzig,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Puskás Aréna, Budapest, Hungary",0,,1371414085
+2020-21,2021-03-10,Paris Saint-Germain,FC Barcelona,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414085
+2020-21,2021-03-16,Manchester City,Bor. Mönchengladbach,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Puskás Aréna, Budapest, Hungary",0,,1371414085
+2020-21,2021-03-16,Real Madrid,Atalanta,False,,,True,Wikipedia attendance = 0,"Alfredo Di Stéfano, Madrid",0,,1371414085
+2020-21,2021-03-17,Bayern München,Lazio Roma,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1371414085
+2020-21,2021-03-17,Chelsea FC,Atlético Madrid,False,,,True,Wikipedia attendance = 0,"Stamford Bridge, London",0,,1371414085
+2020-21,2021-04-06,Manchester City,Borussia Dortmund,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1371414085
+2020-21,2021-04-06,Real Madrid,Liverpool FC,False,,,True,Wikipedia attendance = 0,"Alfredo Di Stéfano, Madrid",0,,1371414085
+2020-21,2021-04-07,FC Porto,Chelsea FC,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville, Spain",0,,1371414085
+2020-21,2021-04-07,Bayern München,Paris Saint-Germain,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1371414085
+2020-21,2021-04-13,Chelsea FC,FC Porto,True,played_abroad,Wikipedia stadium field,True,Wikipedia attendance = 0,"Ramón Sánchez Pizjuán, Seville, Spain",0,,1371414085
+2020-21,2021-04-13,Paris Saint-Germain,Bayern München,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414085
+2020-21,2021-04-14,Borussia Dortmund,Manchester City,False,,,True,Wikipedia attendance = 0,"Westfalenstadion, Dortmund",0,,1371414085
+2020-21,2021-04-14,Liverpool FC,Real Madrid,False,,,True,Wikipedia attendance = 0,"Anfield, Liverpool",0,,1371414085
+2020-21,2021-04-27,Real Madrid,Chelsea FC,False,,,True,Wikipedia attendance = 0,"Alfredo Di Stéfano, Madrid",0,,1371414085
+2020-21,2021-04-28,Paris Saint-Germain,Manchester City,False,,,True,Wikipedia attendance = 0,"Parc des Princes, Paris",0,,1371414085
+2020-21,2021-05-04,Manchester City,Paris Saint-Germain,False,,,True,Wikipedia attendance = 0,"City of Manchester Stadium, Manchester",0,,1371414085
+2020-21,2021-05-05,Chelsea FC,Real Madrid,False,,,True,Wikipedia attendance = 0,"Stamford Bridge, London",0,,1371414085
+2020-21,2021-05-29,Manchester City,Chelsea FC,True,final,rule,False,,"Estádio do Dragão, Porto",14110,,1359669709
+2021-22,2021-12-07,RB Leipzig,Manchester City,False,,,True,Wikipedia attendance = 0,"Red Bull Arena, Leipzig",0,,1376279952
+2021-22,2021-12-07,AFC Ajax,Sporting CP,False,,,True,Wikipedia attendance = 0,"Johan Cruyff Arena, Amsterdam",0,,1376279952
+2021-22,2021-12-08,Bayern München,FC Barcelona,False,,,True,Wikipedia attendance = 0,"Allianz Arena, Munich",0,,1376279952
+2021-22,2021-12-08,RB Salzburg,Sevilla FC,False,,,True,Wikipedia attendance = 0,"Stadion Wals-Siezenheim, Salzburg",0,,1376279952
+2021-22,2022-05-28,Liverpool FC,Real Madrid,True,final,rule,False,,"Stade de France, Saint-Denis",75000,,1376656202
+2022-23,2022-09-14,Shakhtar Donetsk,Celtic FC,True,played_abroad,Wikipedia stadium field,False,,"Stadion Wojska Polskiego, Warsaw, Poland",20697,,1303952051
+2022-23,2022-10-11,Shakhtar Donetsk,Real Madrid,True,played_abroad,Wikipedia stadium field,False,,"Stadion Wojska Polskiego, Warsaw, Poland",29030,,1303952051
+2022-23,2022-11-02,Shakhtar Donetsk,RB Leipzig,True,played_abroad,Wikipedia stadium field,False,,"Stadion Wojska Polskiego, Warsaw, Poland",26045,,1303952051
+2022-23,2023-06-10,Manchester City,Inter,True,final,rule,False,,"Atatürk Olympic Stadium, Istanbul",71412,,1377261615
+2023-24,2023-09-19,FK Shakhtar Donetsk,FC Porto,True,played_abroad,Wikipedia stadium field,False,,"Volksparkstadion, Hamburg, Germany",46729,,1371428685
+2023-24,2023-11-07,FK Shakhtar Donetsk,FC Barcelona,True,played_abroad,Wikipedia stadium field,False,,"Volksparkstadion, Hamburg, Germany",49147,,1371428685
+2023-24,2023-11-28,FK Shakhtar Donetsk,Royal Antwerp FC,True,played_abroad,Wikipedia stadium field,False,,"Volksparkstadion, Hamburg, Germany",47209,,1371428685
+2023-24,2024-06-01,Borussia Dortmund,Real Madrid CF,True,final,rule,False,,"Wembley Stadium, London",86212,,1370459237
+2024-25,2024-10-02,FK Shakhtar Donetsk,Atalanta BC,True,played_abroad,Wikipedia stadium field,False,,"Arena AufSchalke, Gelsenkirchen, Germany",21636,,1379822808
+2024-25,2024-11-06,FK Shakhtar Donetsk,BSC Young Boys,True,played_abroad,Wikipedia stadium field,False,,"Arena AufSchalke, Gelsenkirchen, Germany",17420,,1379822808
+2024-25,2024-12-10,FK Shakhtar Donetsk,FC Bayern München,True,played_abroad,Wikipedia stadium field,False,,"Arena AufSchalke, Gelsenkirchen, Germany",57079,,1379822808
+2024-25,2025-01-22,FK Shakhtar Donetsk,Stade Brestois 29,True,played_abroad,Wikipedia stadium field,False,,"Arena AufSchalke, Gelsenkirchen, Germany",15282,,1379822808
+2024-25,2025-05-31,Paris Saint-Germain FC,FC Internazionale Milano,True,final,rule,False,,"Allianz Arena, Munich",64327,,1379805629
+2025-26,2026-05-30,Paris Saint-Germain FC,Arsenal FC,True,final,rule,False,,"Puskás Aréna, Budapest",61035,,1381583229

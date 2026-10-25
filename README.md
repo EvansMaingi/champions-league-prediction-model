@@ -132,15 +132,20 @@ pytest
 |---|---|---|---|
 | Historical results, 2011-12 to 2025-26 (1,997 matches) | [openfootball/champions-league](https://github.com/openfootball/champions-league) | [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain) | Yes: `data/raw/openfootball/` |
 | Current-season fixtures and results | [football-data.org](https://www.football-data.org) API, free plan | No published redistribution terms | No: fetched locally into `data/raw/football_data_org/` (git-ignored) |
+| Second source for quality checks (scores, kickoff times, venues, attendance) | English [Wikipedia](https://en.wikipedia.org) season, knockout and final articles | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | Raw pages: no. Derived stadium and attendance facts in `data/reference/match_context.csv`, with page revision IDs |
 
 Thanks to the openfootball project for its public-domain data. Football data provided by
-the Football-Data.org API.
+the Football-Data.org API. Venue and attendance information from Wikipedia contributors
+(CC BY-SA 4.0). Every cleaning decision and its evidence is documented in
+[docs/data_notes.md](docs/data_notes.md).
 
 **Collecting the data** (from the project root, with the virtual environment active):
 
 ```bash
 python -m src.data.collect             # historical seasons (skips files already downloaded)
 python -m src.data.collect fixtures    # one timestamped snapshot of current-season fixtures
+python -m src.data.collect wikipedia   # Wikipedia pages used only for quality checks
+python -m src.data.reference           # rebuild the proposed reference tables in data/reference/
 ```
 
 The fixtures command needs a free football-data.org token in `.env` (see `.env.example`).

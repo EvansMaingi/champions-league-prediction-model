@@ -5,10 +5,10 @@ Phase: Milestone 3 - Exploratory data analysis and cleaning.
 Previous stage: collect.py saved raw openfootball Football.TXT files in data/raw/.
 Next stage: validate.py checks this table; build_features.py then uses it.
 
-Step 1 (implemented): parse the raw text into one row per match. The parser fails
-loudly on any line it does not recognise instead of skipping it, so no match can go
-missing silently. It records every score the source gives (90 minutes, half-time,
-after extra time, penalties) without deciding yet which one defines the result
+Step 1 - parse the raw text into one row per match. The parser fails loudly on any
+line it does not recognise instead of skipping it, so no match can go missing
+silently. It records every score the source gives (90 minutes, half-time, after
+extra time, penalties) without deciding yet which one defines the result
 (that is Milestone 4).
 
 Football.TXT layout handled here:
@@ -17,14 +17,19 @@ Football.TXT layout handled here:
         20:45  Home (ENG)  v  Away (ITA)   1-1 (0-0)
                Home (ESP)  v  Away (GER)   0-2 (0-1)   <- inherits the 20:45 kickoff
 
-Kickoff times are stored as written; they appear to be Central European local time
-(assumption, to be verified during EDA).
-
-TODO (later steps, shaped by EDA findings):
-- normalise_team_names(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame
-    Map spelling variants to one canonical team name.
-- clean_matches(raw_dir: Path) -> pd.DataFrame
-    Parse, standardise, save to PROCESSED_DATA_DIR, and return the clean table.
+Step 2 - cleaning decisions from EDA (each documented in docs/data_notes.md):
+- Kickoff times are Central European (Summer) Time, as listed by UEFA, not local
+  venue time: 1,992 of 1,997 match Wikipedia's CET/CEST times exactly (the other 5
+  are delayed or suspended matches). `kickoff_utc` is derived from them.
+- A missing half-time score occurs only when the match ended 0-0, so it is filled
+  with 0-0 and marked `ht_inferred`. Half-time scores are post-kickoff data: they may
+  only feed rolling features built from EARLIER matches, never the current match.
+- Venue and crowd context (`neutral_venue`, `neutral_reason`, `behind_closed_doors`)
+  comes from the reviewed table data/reference/match_context.csv.
+- Knockout matches get `tie_id` and `leg` ("1", "2" or "single").
+- Country codes are UEFA associations: AS Monaco's MCO (used from 2024-25) becomes FRA.
+- Team names are mapped to one standard name per club with the reviewed table
+  data/reference/team_names.csv (see normalise_team_names).
 """
 
 import re
@@ -33,7 +38,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import OPENFOOTBALL_RAW_DIR
+from src.config import OPENFOOTBALL_RAW_DIR, REFERENCE_DIR
 
 DATE_RE = re.compile(r"^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:\s+(\d{4}))?$")
 TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})\s+")
@@ -57,7 +62,7 @@ STAGE_RULES = [
 ]
 SCORE_KINDS = ["ft", "ht", "aet", "pens"]
 COLUMNS = (
-    ["season", "date", "kickoff_local", "stage", "stage_raw",
+    ["season", "date", "kickoff_cet", "stage", "stage_raw",
      "home_team", "home_country", "away_team", "away_country"]
     + [f"{side}_{kind}" for kind in SCORE_KINDS for side in ("home", "away")]
     + ["source_file"]
@@ -155,7 +160,7 @@ def parse_match_line(line: str) -> dict[str, str | int | None]:
     home_team, home_country = split_team(home_text)
     away_team, away_country = split_team(away_match.group(1))
     return {
-        "kickoff_local": kickoff,
+        "kickoff_cet": kickoff,
         "home_team": home_team,
         "home_country": home_country,
         "away_team": away_team,
@@ -191,8 +196,8 @@ def parse_season_text(text: str, season: str, source_file: str = "") -> pd.DataF
                 if stage is None or current_date is None:
                     raise ValueError("Match line before any stage or date line")
                 match = parse_match_line(stripped)
-                current_time = match["kickoff_local"] or current_time
-                match["kickoff_local"] = current_time
+                current_time = match["kickoff_cet"] or current_time
+                match["kickoff_cet"] = current_time
                 rows.append({"season": season, "date": current_date, "stage": stage,
                              "stage_raw": stage_raw, **match, "source_file": source_file})
             else:
@@ -218,6 +223,142 @@ def load_openfootball(raw_dir: Path = OPENFOOTBALL_RAW_DIR) -> pd.DataFrame:
     ]
     return (
         pd.concat(tables, ignore_index=True)
-        .sort_values(["date", "kickoff_local"], kind="stable", na_position="last")
+        .sort_values(["date", "kickoff_cet"], kind="stable", na_position="last")
         .reset_index(drop=True)
     )
+
+
+# --- Step 2: cleaning decisions from EDA --------------------------------------
+
+KNOCKOUT_STAGES = ["playoff", "round_of_16", "quarterfinal", "semifinal", "final"]
+UEFA_TIMEZONE = "Europe/Paris"  # CET/CEST, the zone UEFA lists kickoff times in
+# Country code -> UEFA association. openfootball switched AS Monaco from FRA to MCO in
+# 2024-25; Monaco plays in the French league and enters through France's association.
+ASSOCIATION_CODES = {"MCO": "FRA"}
+
+
+def normalise_country_codes(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace country codes with UEFA association codes (see ASSOCIATION_CODES)."""
+    out = df.copy()
+    for column in ("home_country", "away_country"):
+        out[column] = out[column].replace(ASSOCIATION_CODES)
+    return out
+
+
+def add_kickoff_utc(df: pd.DataFrame) -> pd.DataFrame:
+    """Add `kickoff_utc` (timezone-aware) from `date` + `kickoff_cet` (CET/CEST)."""
+    out = df.copy()
+    local = pd.to_datetime(out["date"].dt.strftime("%Y-%m-%d") + " " + out["kickoff_cet"])
+    out["kickoff_utc"] = local.dt.tz_localize(UEFA_TIMEZONE).dt.tz_convert("UTC")
+    return out
+
+
+def add_ht_inferred(df: pd.DataFrame) -> pd.DataFrame:
+    """Fill a missing half-time score with 0-0 when the 90-minute score is 0-0.
+
+    The source omits the half-time score only for goalless matches, where it cannot be
+    anything but 0-0. `ht_inferred` marks the filled rows; other missing half-time
+    scores (none at present) stay <NA>.
+    """
+    out = df.copy()
+    inferable = out["home_ht"].isna() & out["away_ht"].isna() & (out["home_ft"] == 0) & (out["away_ft"] == 0)
+    out.loc[inferable, ["home_ht", "away_ht"]] = 0
+    out["ht_inferred"] = inferable.astype(bool)
+    return out
+
+
+def load_match_context(path: Path = REFERENCE_DIR / "match_context.csv") -> pd.DataFrame:
+    """Read the reviewed venue/crowd table (one row per flagged match)."""
+    context = pd.read_csv(path, parse_dates=["date"], keep_default_na=False)
+    for column in ("neutral_venue", "behind_closed_doors"):
+        context[column] = context[column].astype(str).str.lower().eq("true")
+    return context
+
+
+def add_match_context(df: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
+    """Add `neutral_venue`, `neutral_reason` and `behind_closed_doors` from the reference table.
+
+    Matches not in the table get False / "". Raises if a reference row does not match
+    exactly one match, so a typo in the table can never silently drop a flag.
+    """
+    key = ["season", "date", "home_team", "away_team"]
+    columns = ["neutral_venue", "neutral_reason", "behind_closed_doors"]
+    if context.duplicated(subset=key).any():
+        raise ValueError(f"Duplicate rows in match context: {context[context.duplicated(subset=key)][key].values.tolist()}")
+    merged = df.merge(context[key + columns], on=key, how="left", indicator=True, validate="one_to_one")
+    unmatched = context.merge(df[key], on=key, how="left", indicator=True)
+    unmatched = unmatched[unmatched["_merge"] == "left_only"]
+    if not unmatched.empty:
+        raise ValueError(f"Match context rows match no match: {unmatched[key].values.tolist()}")
+    merged["neutral_venue"] = merged["neutral_venue"].fillna(False).astype(bool)
+    merged["behind_closed_doors"] = merged["behind_closed_doors"].fillna(False).astype(bool)
+    merged["neutral_reason"] = merged["neutral_reason"].fillna("")
+    return merged.drop(columns="_merge")
+
+
+def is_single_leg_stage(season: str, stage: str) -> bool:
+    """True where a knockout stage is a single match: every final, and the 2019-20
+    quarter- and semi-finals (Lisbon "Final 8")."""
+    return stage == "final" or (season == "2019-20" and stage in ("quarterfinal", "semifinal"))
+
+
+def add_ties(df: pd.DataFrame) -> pd.DataFrame:
+    """Add `tie_id` and `leg` to knockout matches (both <NA> for group/league matches).
+
+    A tie is the set of matches between the same two teams in the same season and
+    stage. Legs are numbered by date. tie_id is "<season>_<stage>_<NN>", numbered in
+    order of the first leg's date and home team.
+
+    Raises:
+        ValueError: If a two-legged stage has a lone match, a tie has more than two
+            matches, or the second leg does not swap home and away.
+    """
+    out = df.copy()
+    out["tie_id"] = pd.Series(pd.NA, index=out.index, dtype="string")
+    out["leg"] = pd.Series(pd.NA, index=out.index, dtype="string")
+    knockout = out[out["stage"].isin(KNOCKOUT_STAGES)]
+    pair = knockout.apply(lambda r: tuple(sorted((r["home_team"], r["away_team"]))), axis=1)
+
+    for (season, stage), stage_rows in knockout.groupby(["season", "stage"]):
+        ties = stage_rows.groupby(pair.loc[stage_rows.index])
+        ordered = sorted(ties, key=lambda t: (t[1]["date"].min(), t[1].sort_values("date")["home_team"].iloc[0]))
+        for number, (teams, tie) in enumerate(ordered, start=1):
+            tie = tie.sort_values(["date", "kickoff_cet"])
+            tie_id = f"{season}_{stage}_{number:02d}"
+            if len(tie) == 1:
+                if not is_single_leg_stage(season, stage):
+                    raise ValueError(f"{tie_id} {teams}: lone match in a two-legged stage")
+                legs = ["single"]
+            elif len(tie) == 2:
+                first, second = tie.iloc[0], tie.iloc[1]
+                if (first["home_team"], first["away_team"]) != (second["away_team"], second["home_team"]):
+                    raise ValueError(f"{tie_id} {teams}: second leg does not swap home and away")
+                legs = ["1", "2"]
+            else:
+                raise ValueError(f"{tie_id} {teams}: {len(tie)} matches in one tie")
+            out.loc[tie.index, "tie_id"] = tie_id
+            out.loc[tie.index, "leg"] = legs
+    return out
+
+
+def load_team_names(path: Path = REFERENCE_DIR / "team_names.csv", source: str = "openfootball") -> dict[str, str]:
+    """Return {source name: standard name} for one source from the reviewed table."""
+    table = pd.read_csv(path, dtype=str, keep_default_na=False)
+    rows = table[table["source"] == source]
+    return dict(zip(rows["source_name"], rows["standard_name"]))
+
+
+def normalise_team_names(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame:
+    """Replace home/away team names with standard names; keep the originals as *_source.
+
+    Raises (via validate.check_teams_mapped) if any name is missing from the mapping,
+    so a new spelling can never slip through as a "new club".
+    """
+    from src.data.validate import check_teams_mapped  # local import avoids a cycle
+
+    check_teams_mapped(df, mapping)
+    out = df.copy()
+    for side in ("home", "away"):
+        out[f"{side}_team_source"] = out[f"{side}_team"]
+        out[f"{side}_team"] = out[f"{side}_team"].map(mapping)
+    return out

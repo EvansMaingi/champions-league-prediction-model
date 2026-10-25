@@ -5,12 +5,14 @@ Phase: Milestone 2 - Data collection.
 Previous stage: none. This is the entry point of the pipeline.
 Next stage: clean.py parses the files written here into a match table.
 
-Two sources:
+Sources:
 - Historical results: openfootball/champions-league (CC0-1.0 public domain), one
   Football.TXT file per season, committed to git.
 - Current-season fixtures: football-data.org API (free plan). Each fetch is saved as a
   new timestamped snapshot, because fixtures change; the folder is git-ignored because
   the provider publishes no redistribution terms.
+- Quality-check pages: English Wikipedia season articles (CC BY-SA 4.0), used to
+  cross-check scores, kickoff times, venues and attendances; git-ignored.
 
 Files are saved byte-for-byte as downloaded and never edited. Every download is
 recorded in a log (URL, UTC timestamp, size, SHA-256) so each file can be traced back
@@ -19,6 +21,7 @@ to its source and checked for later changes. API keys never appear in logs or ou
 Run from the project root:
     python -m src.data.collect             # historical seasons (default)
     python -m src.data.collect fixtures    # one current-season fixture snapshot
+    python -m src.data.collect wikipedia   # Wikipedia pages for quality checks
 """
 
 import argparse
@@ -38,8 +41,11 @@ from src.config import (
     FOOTBALL_DATA_KEY_VAR,
     FOOTBALL_DATA_RAW_DIR,
     HISTORICAL_SEASONS,
+    HTTP_USER_AGENT,
     OPENFOOTBALL_BASE_URL,
     OPENFOOTBALL_RAW_DIR,
+    WIKIPEDIA_API_URL,
+    WIKIPEDIA_RAW_DIR,
 )
 
 SEASON_PATTERN = re.compile(r"^\d{4}-\d{2}$")  # e.g. "2025-26"
@@ -182,20 +188,108 @@ def collect_fixtures(
     return save_and_log(content, path, "current", url, now)
 
 
+# --- Second source for quality checks (Wikipedia) ----------------------------
+
+
+def wikipedia_titles(season: str) -> dict[str, str]:
+    """Return {page kind: article title} for a season's Wikipedia match articles.
+
+    Example: "2015-16" -> {"group_stage": "2015–16 UEFA Champions League group stage",
+                           "knockout_phase": "2015–16 UEFA Champions League knockout phase",
+                           "final": "2016 UEFA Champions League final"}
+    The 36-team format (2024-25 on) has a "league phase" article instead of a group stage.
+    The final has its own article, named after the year it was played.
+    """
+    build_season_url(season)  # validates the season string
+    title_season = season.replace("-", "–")  # Wikipedia titles use an en dash
+    first_phase = "league_phase" if int(season[:4]) >= 2024 else "group_stage"
+    return {
+        first_phase: f"{title_season} UEFA Champions League {first_phase.replace('_', ' ')}",
+        "knockout_phase": f"{title_season} UEFA Champions League knockout phase",
+        "final": f"{int(season[:4]) + 1} UEFA Champions League final",
+    }
+
+
+def wikipedia_api_url(title: str) -> str:
+    """Return the API URL that fetches the current wikitext and revision ID of a page."""
+    query = requests.models.PreparedRequest()
+    query.prepare_url(WIKIPEDIA_API_URL, {
+        "action": "query", "prop": "revisions", "rvprop": "ids|content", "rvslots": "main",
+        "titles": title, "format": "json", "formatversion": "2", "redirects": "1",
+    })
+    return query.url
+
+
+def collect_wikipedia_season(
+    season: str,
+    out_dir: Path = WIKIPEDIA_RAW_DIR,
+    overwrite: bool = False,
+    kinds: list[str] | None = None,
+) -> list[Path]:
+    """Save a season's Wikipedia API responses unchanged as JSON (one file per article).
+
+    Args:
+        kinds: Only these page kinds (e.g. ["league_phase"] for a season in progress,
+            whose knockout and final articles may not exist yet). Default: all.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for kind, title in wikipedia_titles(season).items():
+        if kinds is not None and kind not in kinds:
+            continue
+        path = out_dir / f"{season}_{kind}.json"
+        if not path.exists() or overwrite:
+            url = wikipedia_api_url(title)
+            content = download_bytes(url, headers={"User-Agent": HTTP_USER_AGENT})
+            save_and_log(content, path, season, url, datetime.now(timezone.utc))
+        paths.append(path)
+    return paths
+
+
+def collect_wikipedia_title_resolution(
+    titles: list[str], out_path: Path, overwrite: bool = False
+) -> Path:
+    """Ask Wikipedia which final article each title leads to (redirects resolved).
+
+    Saves the raw API responses (50 titles per request, the API limit) as one JSON
+    list, logged like every other download.
+    """
+    if out_path.exists() and not overwrite:
+        return out_path
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    responses, urls = [], []
+    for start in range(0, len(titles), 50):
+        query = requests.models.PreparedRequest()
+        query.prepare_url(WIKIPEDIA_API_URL, {
+            "action": "query", "titles": "|".join(titles[start:start + 50]),
+            "redirects": "1", "format": "json", "formatversion": "2",
+        })
+        urls.append(query.url)
+        content = download_bytes(query.url, headers={"User-Agent": HTTP_USER_AGENT})
+        responses.append(content.decode("utf-8"))
+    content = ("[" + ",".join(responses) + "]").encode("utf-8")
+    return save_and_log(content, out_path, "titles", " ".join(urls), datetime.now(timezone.utc))
+
+
 def main() -> None:
-    """Command-line entry point: collect historical seasons or a fixture snapshot."""
+    """Command-line entry point: collect historical seasons, fixtures or check pages."""
     parser = argparse.ArgumentParser(description="Download raw Champions League data.")
     parser.add_argument(
-        "source", nargs="?", default="historical", choices=["historical", "fixtures"]
+        "source", nargs="?", default="historical",
+        choices=["historical", "fixtures", "wikipedia"],
     )
     args = parser.parse_args()
 
     if args.source == "historical":
         for saved in collect_seasons():
             print(f"{saved.name}: {saved.stat().st_size:,} bytes")
-    else:
+    elif args.source == "fixtures":
         saved = collect_fixtures(load_api_key())
         print(f"Saved snapshot {saved.name}: {saved.stat().st_size:,} bytes")
+    else:
+        for season in HISTORICAL_SEASONS:
+            for saved in collect_wikipedia_season(season):
+                print(f"{saved.name}: {saved.stat().st_size:,} bytes")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Tests for src/data: collect.py and the clean.py parser (validate.py later).
+"""Tests for src/data: collect.py, clean.py and validate.py.
 
 Network calls are replaced with a fake download (monkeypatch) and files are written to
 pytest's temporary folder (tmp_path), so tests never touch the internet or data/raw/.
@@ -16,7 +16,7 @@ from datetime import date, datetime, timezone
 import pandas as pd
 import pytest
 
-from src.data import clean, collect
+from src.data import clean, collect, validate
 
 FAKE_CONTENT = "= test file\r\n  Ünïcode line\n".encode("utf-8")
 FAKE_KEY = "test-key-not-real"
@@ -84,6 +84,26 @@ def test_collect_season_overwrite_downloads_again(tmp_path, fake_download):
 def test_collect_seasons_returns_paths_in_order(tmp_path, fake_download):
     paths = collect.collect_seasons(["2011-12", "2012-13"], tmp_path)
     assert [p.name for p in paths] == ["2011-12_cl.txt", "2012-13_cl.txt"]
+
+
+# --- Wikipedia pages (second source) --------------------------------------------
+
+
+def test_wikipedia_titles_per_format():
+    assert collect.wikipedia_titles("2015-16") == {
+        "group_stage": "2015–16 UEFA Champions League group stage",
+        "knockout_phase": "2015–16 UEFA Champions League knockout phase",
+        "final": "2016 UEFA Champions League final",
+    }
+    assert "league_phase" in collect.wikipedia_titles("2024-25")
+
+
+def test_collect_wikipedia_season_sends_user_agent_and_filters_kinds(tmp_path, fake_download):
+    paths = collect.collect_wikipedia_season("2026-27", tmp_path, kinds=["league_phase"])
+    assert [p.name for p in paths] == ["2026-27_league_phase.json"]
+    url, headers = fake_download[0]
+    assert "league+phase" in url
+    assert headers["User-Agent"].startswith("champions-league-prediction-model")
 
 
 # --- football-data.org fixtures ---------------------------------------------
@@ -210,7 +230,7 @@ def test_normalise_stage(header, stage):
 
 def test_parse_match_line_splits_teams_countries_and_score():
     row = clean.parse_match_line("21:00  Paris Saint-Germain FC (FRA) v FC Bayern München (GER)  5-4 (3-2)")
-    assert row["kickoff_local"] == "21:00"
+    assert row["kickoff_cet"] == "21:00"
     assert (row["home_team"], row["home_country"]) == ("Paris Saint-Germain FC", "FRA")
     assert (row["away_team"], row["away_country"]) == ("FC Bayern München", "GER")
     assert (row["home_ft"], row["away_ft"], row["home_ht"], row["away_ht"]) == (5, 4, 3, 2)
@@ -227,7 +247,7 @@ def test_parse_season_text_builds_one_row_per_match():
 def test_parse_season_text_infers_dates_and_inherits_kickoff_time():
     df = clean.parse_season_text(SAMPLE_SEASON, "2015-16")
     assert df["date"].dt.date.tolist() == [date(2015, 9, 15)] * 2 + [date(2016, 3, 15), date(2016, 3, 16)]
-    assert df["kickoff_local"].tolist() == ["20:45", "20:45", "20:45", "18:00"]
+    assert df["kickoff_cet"].tolist() == ["20:45", "20:45", "20:45", "18:00"]
 
 
 def test_parse_season_text_keeps_missing_scores_missing():
@@ -259,3 +279,165 @@ def test_load_openfootball_sorts_seasons_chronologically(tmp_path):
 def test_load_openfootball_errors_when_no_files(tmp_path):
     with pytest.raises(FileNotFoundError):
         clean.load_openfootball(tmp_path)
+
+
+# --- clean.py: cleaning steps -------------------------------------------------
+
+KNOCKOUT_SEASON = """▪ Round of 16
+  Tue Feb 16 2016
+    20:45  Paris Saint-Germain (FRA) v Chelsea FC (ENG)    2-1 (1-1)
+  Tue Mar 1
+    20:45  Lyon (FRA)              v Porto (POR)            0-0
+  Wed Mar 9
+    20:45  Chelsea FC (ENG)        v Paris Saint-Germain (FRA)  1-2 (1-1)
+  Tue Mar 15
+    20:45  Porto (POR)             v Lyon (FRA)             3-2 pen. 0-0 a.e.t. (0-0)
+▪ Final
+  Sat May 28
+    20:45  Paris Saint-Germain (FRA) v Porto (POR)          1-1 (0-1)
+"""
+
+
+def knockout_table() -> pd.DataFrame:
+    """Small parsed knockout season: two two-legged ties and a final."""
+    return clean.parse_season_text(KNOCKOUT_SEASON, "2015-16")
+
+
+def test_add_kickoff_utc_handles_winter_and_summer_time():
+    df = clean.add_kickoff_utc(knockout_table())
+    utc = df["kickoff_utc"].dt.strftime("%H:%M").tolist()
+    assert utc[0] == "19:45"   # 16 Feb: CET = UTC+1
+    assert utc[-1] == "18:45"  # 28 May: CEST = UTC+2
+    assert str(df["kickoff_utc"].dt.tz) == "UTC"
+
+
+def test_add_ht_inferred_fills_only_goalless_matches():
+    df = clean.add_ht_inferred(knockout_table())
+    goalless = (df["home_ft"] == 0) & (df["away_ft"] == 0)  # Lyon v Porto, both legs
+    assert goalless.sum() == 2
+    assert (df.loc[goalless, ["home_ht", "away_ht"]] == 0).all().all()
+    assert df["ht_inferred"].tolist() == goalless.tolist()
+
+
+def test_add_ht_inferred_leaves_other_missing_values_missing():
+    df = knockout_table()
+    df.loc[0, ["home_ht", "away_ht"]] = pd.NA  # 2-1 at 90 minutes: half-time unknown
+    out = clean.add_ht_inferred(df)
+    assert pd.isna(out.loc[0, "home_ht"]) and not out.loc[0, "ht_inferred"]
+
+
+def context_rows(rows: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame(rows, columns=["season", "date", "home_team", "away_team",
+                                       "neutral_venue", "neutral_reason", "behind_closed_doors"])
+
+
+def test_add_match_context_flags_listed_matches_only():
+    context = context_rows([
+        {"season": "2015-16", "date": pd.Timestamp("2016-05-28"), "home_team": "Paris Saint-Germain",
+         "away_team": "Porto", "neutral_venue": True, "neutral_reason": "final", "behind_closed_doors": False},
+        {"season": "2015-16", "date": pd.Timestamp("2016-03-01"), "home_team": "Lyon",
+         "away_team": "Porto", "neutral_venue": False, "neutral_reason": "", "behind_closed_doors": True},
+    ])
+    df = clean.add_match_context(knockout_table(), context)
+    assert df["neutral_venue"].sum() == 1 and df["behind_closed_doors"].sum() == 1
+    assert df.loc[df["neutral_venue"], "neutral_reason"].item() == "final"
+    assert set(df.loc[~df["neutral_venue"], "neutral_reason"]) == {""}
+
+
+def test_add_match_context_rejects_rows_that_match_nothing():
+    context = context_rows([
+        {"season": "2015-16", "date": pd.Timestamp("2016-05-29"), "home_team": "Paris Saint-Germain",
+         "away_team": "Porto", "neutral_venue": True, "neutral_reason": "final", "behind_closed_doors": False},
+    ])
+    with pytest.raises(ValueError, match="match no match"):
+        clean.add_match_context(knockout_table(), context)
+
+
+def test_add_ties_numbers_legs_and_singles():
+    df = clean.add_ties(knockout_table())
+    assert df["leg"].tolist() == ["1", "1", "2", "2", "single"]
+    assert df["tie_id"].tolist() == ["2015-16_round_of_16_01", "2015-16_round_of_16_02",
+                                     "2015-16_round_of_16_01", "2015-16_round_of_16_02", "2015-16_final_01"]
+
+
+def test_add_ties_leaves_group_matches_without_tie():
+    parsed = clean.parse_season_text(SAMPLE_SEASON, "2015-16")
+    df = clean.add_ties(parsed[parsed["stage"] == "group"])
+    assert df[["tie_id", "leg"]].isna().all().all()
+
+
+def test_add_ties_rejects_lone_match_in_two_legged_stage():
+    lone = knockout_table().drop(index=2)  # remove PSG v Chelsea's second leg
+    with pytest.raises(ValueError, match="lone match"):
+        clean.add_ties(lone)
+
+
+def test_add_ties_allows_single_matches_in_lisbon_final_8():
+    text = "▪ Quarterfinals\n  Wed Aug 12 2020\n    21:00  Atalanta (ITA) v Paris Saint-Germain (FRA)  1-2 (1-0)\n"
+    df = clean.add_ties(clean.parse_season_text(text, "2019-20"))
+    assert df["leg"].tolist() == ["single"]
+
+
+def test_add_ties_rejects_second_leg_without_home_away_swap():
+    df = knockout_table()
+    df.loc[2, ["home_team", "away_team"]] = ["Paris Saint-Germain", "Chelsea FC"]
+    with pytest.raises(ValueError, match="does not swap"):
+        clean.add_ties(df)
+
+
+def test_normalise_country_codes_maps_monaco_to_france():
+    df = knockout_table()
+    df.loc[0, "home_country"] = "MCO"
+    out = clean.normalise_country_codes(df)
+    assert out.loc[0, "home_country"] == "FRA"
+    assert out["away_country"].tolist() == df["away_country"].tolist()  # others unchanged
+
+
+def test_normalise_team_names_maps_and_keeps_source_names():
+    mapping = {"Paris Saint-Germain": "Paris Saint-Germain", "Chelsea FC": "Chelsea",
+               "Lyon": "Lyon", "Porto": "Porto"}
+    df = clean.normalise_team_names(knockout_table(), mapping)
+    assert "Chelsea" in set(df["away_team"]) and "Chelsea FC" not in set(df["away_team"])
+    assert "Chelsea FC" in set(df["away_team_source"])
+
+
+def test_normalise_team_names_fails_on_unmapped_name():
+    with pytest.raises(ValueError, match="Chelsea FC"):
+        clean.normalise_team_names(knockout_table(), {"Paris Saint-Germain": "PSG", "Lyon": "Lyon", "Porto": "Porto"})
+
+
+# --- validate.py ----------------------------------------------------------------
+
+
+def test_check_teams_mapped_lists_every_missing_name():
+    with pytest.raises(ValueError, match=r"2 team name\(s\).*Chelsea FC.*Lyon"):
+        validate.check_teams_mapped(knockout_table(), {"Paris Saint-Germain": "PSG", "Porto": "Porto"})
+
+
+def test_check_scores_consistent_passes_real_formats():
+    validate.check_scores_consistent(knockout_table())  # no error
+
+
+def test_check_scores_consistent_rejects_half_time_above_full_time():
+    df = knockout_table()
+    df.loc[0, "home_ht"] = 3  # 3 at half-time but 2 at full time
+    with pytest.raises(ValueError, match="half-time > 90 minutes"):
+        validate.check_scores_consistent(df)
+
+
+def test_check_shootouts_accepts_level_aggregate_in_second_leg():
+    validate.check_shootouts(clean.add_ties(knockout_table()))  # 0-0, then 0-0 a.e.t.: level
+
+
+def test_check_shootouts_accepts_level_two_legs_with_unlevel_second_leg():
+    df = clean.add_ties(knockout_table())
+    df.loc[df["home_team"].eq("Lyon"), "home_ft"] = 1                       # leg 1: Lyon 1-0 Porto
+    df.loc[df["home_team"].eq("Porto") & df["stage"].eq("round_of_16"), "home_aet"] = 1  # leg 2: Porto 1-0 a.e.t.
+    validate.check_shootouts(df)  # aggregate 1-1, so the shootout is valid
+
+
+def test_check_shootouts_rejects_unlevel_aggregate():
+    df = clean.add_ties(knockout_table())
+    df.loc[df["home_team"].eq("Lyon"), "home_ft"] = 1  # leg 1: Lyon 1-0 Porto; leg 2 0-0: aggregate 1-0
+    with pytest.raises(ValueError, match="not level"):
+        validate.check_shootouts(df)

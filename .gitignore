@@ -14,6 +14,8 @@ __pycache__/
 # football-data.org API responses: no published redistribution terms, so kept local only.
 # (openfootball files in data/raw/openfootball/ are CC0 and are committed.)
 data/raw/football_data_org/
+# Wikipedia pages (CC BY-SA 4.0), used only for quality checks; kept local.
+data/raw/wikipedia/
 
 # Trained models (rebuilt by training, not stored in git)
 models/*.joblib
