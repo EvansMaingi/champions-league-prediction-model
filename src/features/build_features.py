@@ -49,10 +49,13 @@ regression toward 1500 between seasons, all fixed in advance; Milestone 7 may tu
 on validation data only. Known limits (docs/data_notes.md): the rating scale needs about
 four seasons to spread out, and newcomers starting at 1500 are overrated.
 
-TODO (Part C):
-- Context features; for a second leg, the first-leg score is legitimate
-  pre-match information (before 2021-22 the away goals rule applied, so "level after
-  leg 1" meant more than goal difference).
+Part C, context (add_context_features): venue flags, stage, leg_type, and for second
+legs the first-leg score from the leg-2 home team's point of view, its leg-1 (away)
+goals and whether the away goals rule applied (up to 2020-21). Rest days and
+head-to-head were considered and dropped (docs/data_notes.md).
+
+build_feature_table assembles identifiers + target + the 25 ALLOWED_FEATURES and is
+saved to data/processed/features.csv; load it with load_feature_table.
 """
 
 from typing import Literal
@@ -98,10 +101,18 @@ FORM_FEATURES: list[str] = [
 ]
 # Part B (add_elo_features): Champions-League-only Elo, the rating BEFORE kickoff.
 ELO_FEATURES: list[str] = ["home_elo", "away_elo", "elo_diff", "home_elo_n", "away_elo_n"]
-DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES, *ELO_FEATURES]
+# Part C (add_context_features): match situation known before kickoff.
+CONTEXT_DERIVED: list[str] = ["leg_type", "first_leg_goal_diff", "first_leg_away_goals", "away_goals_rule"]
+CONTEXT_FEATURES: list[str] = ["neutral_venue", "played_abroad", "behind_closed_doors", "stage", *CONTEXT_DERIVED]
+DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES, *ELO_FEATURES, *CONTEXT_DERIVED]
 
-# Allowlist of model inputs, declared part by part (Milestone 5).
-ALLOWED_FEATURES: list[str] = [*FORM_FEATURES, *ELO_FEATURES]
+# Final Milestone 5 allowlist of model inputs (25 features: 12 form, 5 Elo, 8 context).
+# Deliberately NOT allowed:
+# season (lets a model memorise per-season rates, useless for a new season), team names
+# and countries (identity; a Milestone 7 experiment with unknown-team handling),
+# stage_raw and neutral_reason (redundant), rest days and head-to-head (dropped in
+# Part C, see docs/data_notes.md).
+ALLOWED_FEATURES: list[str] = [*FORM_FEATURES, *ELO_FEATURES, *CONTEXT_FEATURES]
 
 COLUMN_ROLES: dict[str, str] = {
     **{column: "pre_match" for column in PRE_MATCH},
@@ -331,9 +342,85 @@ def add_elo_features(
     return out
 
 
+# --- Part C: context features (Milestone 5) ----------------------------------------
+
+AWAY_GOALS_RULE_LAST_SEASON = "2020-21"  # UEFA abolished the rule from 2021-22
+
+
+def add_context_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add situation features known before kickoff.
+
+    - leg_type: "1", "2", "single" (knockout) or "none" (group / league phase).
+    - For second legs, from the leg-2 HOME team's point of view (it was the away side
+      in leg 1; the first leg always finished at least 5 days earlier):
+        first_leg_goal_diff: its leg-1 goals minus the opponent's;
+        first_leg_away_goals: its leg-1 goals, which were away goals;
+        away_goals_rule: True when the away goals rule applied (seasons up to 2020-21).
+      All three are missing / False for matches that are not second legs.
+    """
+    out = df.copy()
+    out["leg_type"] = out["leg"].astype("string").fillna("none")
+    # leg is a nullable string: comparing <NA> gives <NA>, so "not a second leg" is made
+    # explicitly False (otherwise away_goals_rule would be <NA> for group matches).
+    second = (out["leg"] == "2").fillna(False).astype(bool)
+    first_legs = out[out["leg"] == "1"].set_index("tie_id")
+    leg1 = first_legs.loc[out.loc[second, "tie_id"]]
+    # Leg 1's away team is leg 2's home team.
+    if not (leg1["away_team"].to_numpy() == out.loc[second, "home_team"].to_numpy()).all():
+        raise ValueError("A second leg's home team was not the first leg's away team")
+    out["first_leg_goal_diff"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
+    out["first_leg_away_goals"] = pd.Series(pd.NA, index=out.index, dtype="Int64")
+    out.loc[second, "first_leg_goal_diff"] = (leg1["away_ft"] - leg1["home_ft"]).to_numpy()
+    out.loc[second, "first_leg_away_goals"] = leg1["away_ft"].to_numpy()
+    out["away_goals_rule"] = second & (out["season"] <= AWAY_GOALS_RULE_LAST_SEASON)
+    return out
+
+
+# --- Complete feature table ----------------------------------------------------------
+
+FEATURE_TABLE_FILE = "features.csv"
+FEATURE_TABLE_KEYS = ["season", "date", "kickoff_utc", "stage", "tie_id", "home_team", "away_team"]
+
+
+def build_feature_table(matches: pd.DataFrame) -> pd.DataFrame:
+    """Target + every allowed feature, one row per match, in chronological order.
+
+    Columns: FEATURE_TABLE_KEYS (identifiers, for splitting and tracing), the target
+    `result`, then ALLOWED_FEATURES. Models must select inputs with ALLOWED_FEATURES only.
+    """
+    assert_valid_features(ALLOWED_FEATURES, ALLOWED_FEATURES)
+    table = add_result_target(matches)
+    table = add_form_features(table)
+    table = add_elo_features(table)
+    table = add_context_features(table)
+    keys = list(dict.fromkeys(FEATURE_TABLE_KEYS))
+    columns = keys + [TARGET] + [c for c in ALLOWED_FEATURES if c not in keys]
+    return table.sort_values("kickoff_utc", kind="stable")[columns]
+
+
+def load_feature_table(path) -> pd.DataFrame:
+    """Read a saved feature table back with its column types."""
+    df = pd.read_csv(path, keep_default_na=False, na_values={c: [""] for c in ALLOWED_FEATURES + ["tie_id"]},
+                     dtype={"season": str, "stage": str, "leg_type": str, "home_team": str, "away_team": str})
+    df["date"] = pd.to_datetime(df["date"])
+    df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"], utc=True)
+    df[TARGET] = df[TARGET].astype(RESULT_DTYPE)
+    bools = [c for c in ALLOWED_FEATURES if c.endswith("has_history")] + [
+        "neutral_venue", "played_abroad", "behind_closed_doors", "away_goals_rule"]
+    for column in bools:
+        df[column] = df[column].astype(str).eq("True")
+    for column in ("first_leg_goal_diff", "first_leg_away_goals"):
+        df[column] = df[column].astype("Int64")
+    df["tie_id"] = df["tie_id"].astype("string")
+    return df
+
+
 if __name__ == "__main__":
     from src.config import PROCESSED_DATA_DIR
     from src.data.clean import load_clean_matches
 
-    table = add_result_target(load_clean_matches(PROCESSED_DATA_DIR / "matches.csv"))
-    print(result_counts(table).to_string())
+    features = build_feature_table(load_clean_matches(PROCESSED_DATA_DIR / "matches.csv"))
+    features.to_csv(PROCESSED_DATA_DIR / FEATURE_TABLE_FILE, index=False, encoding="utf-8")
+    print(f"Saved {PROCESSED_DATA_DIR / FEATURE_TABLE_FILE}: {len(features)} matches, "
+          f"{len(ALLOWED_FEATURES)} features")
+    print(result_counts(features).to_string())

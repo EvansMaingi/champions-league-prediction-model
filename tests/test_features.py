@@ -326,3 +326,101 @@ def test_part_b_features_are_registered_and_allowed():
     bf.assert_valid_features(bf.ELO_FEATURES, bf.ALLOWED_FEATURES)
     produced = set(bf.add_elo_features(SEQUENCE).columns) - set(SEQUENCE.columns)
     assert produced == set(bf.ELO_FEATURES)
+
+
+# --- Part C: context features and the complete feature table -------------------------
+
+TWO_SEASONS = """▪ Group A
+  Tue Sep 15 2020
+    20:00  Ajax (NED)  v Juventus (ITA)  1-0 (1-0)
+▪ Round of 16
+  Tue Feb 16 2021
+    20:00  Ajax (NED)  v Juventus (ITA)  1-1 (0-0)
+  Tue Mar 9
+    20:00  Juventus (ITA)  v Ajax (NED)  0-0
+"""
+LATER_SEASON = """▪ Round of 16
+  Tue Feb 15 2022
+    20:00  Ajax (NED)  v Juventus (ITA)  2-0 (1-0)
+  Wed Mar 9
+    20:00  Juventus (ITA)  v Ajax (NED)  3-1 (1-1)
+"""
+
+
+def knockout_matches() -> pd.DataFrame:
+    """Small clean table: a group match plus two-legged ties in 2020-21 and 2021-22."""
+    tables = [clean.parse_season_text(TWO_SEASONS, "2020-21"), clean.parse_season_text(LATER_SEASON, "2021-22")]
+    df = pd.concat(tables, ignore_index=True)
+    df = clean.add_kickoff_utc(clean.add_ht_inferred(df))
+    df = df.assign(neutral_venue=False, neutral_reason="", played_abroad=False, behind_closed_doors=False)
+    return clean.add_ties(df)
+
+
+def test_leg_type_has_no_missing_values():
+    df = bf.add_context_features(knockout_matches())
+    assert df["leg_type"].tolist() == ["none", "1", "2", "1", "2"]
+
+
+def test_first_leg_features_from_second_leg_home_team_perspective():
+    df = bf.add_context_features(knockout_matches())
+    leg2_2021 = df.iloc[2]   # Juventus at home; leg 1 was Ajax 1-1 Juventus
+    assert (leg2_2021["first_leg_goal_diff"], leg2_2021["first_leg_away_goals"]) == (0, 1)
+    leg2_2022 = df.iloc[4]   # Juventus at home; leg 1 was Ajax 2-0 Juventus
+    assert (leg2_2022["first_leg_goal_diff"], leg2_2022["first_leg_away_goals"]) == (-2, 0)
+    assert df.loc[df["leg_type"] != "2", ["first_leg_goal_diff", "first_leg_away_goals"]].isna().all().all()
+
+
+def test_away_goals_rule_only_for_second_legs_up_to_2020_21():
+    df = bf.add_context_features(knockout_matches())
+    assert df["away_goals_rule"].dtype == bool                     # never <NA> (regression test)
+    assert df["away_goals_rule"].tolist() == [False, False, True, False, False]
+
+
+def test_first_leg_mismatch_raises():
+    df = knockout_matches()
+    df.loc[2, ["home_team", "away_team"]] = ["Ajax", "Juventus"]   # leg 2 with leg-1 home team at home
+    with pytest.raises(ValueError, match="first leg's away team"):
+        bf.add_context_features(df)
+
+
+def test_final_allowlist_is_valid_and_complete():
+    bf.assert_valid_features(bf.ALLOWED_FEATURES, bf.ALLOWED_FEATURES)
+    assert len(bf.ALLOWED_FEATURES) == len(set(bf.ALLOWED_FEATURES)) == 25
+    assert not set(bf.ALLOWED_FEATURES) & bf.FORBIDDEN_FEATURE_COLUMNS
+    for excluded in ("season", "home_team", "away_team", "home_country", "stage_raw", "neutral_reason", "leg"):
+        assert excluded not in bf.ALLOWED_FEATURES
+
+
+def test_feature_table_columns():
+    table = bf.build_feature_table(knockout_matches())
+    # "stage" is both a key and a feature; it appears once.
+    features_after_keys = [c for c in bf.ALLOWED_FEATURES if c not in bf.FEATURE_TABLE_KEYS]
+    assert list(table.columns) == bf.FEATURE_TABLE_KEYS + ["result"] + features_after_keys
+    assert set(bf.ALLOWED_FEATURES) <= set(table.columns)
+    assert table["kickoff_utc"].is_monotonic_increasing
+
+
+def test_feature_table_unchanged_when_later_matches_are_removed():
+    matches_ = knockout_matches()
+    full = bf.build_feature_table(matches_)
+    cut = bf.build_feature_table(matches_[matches_["date"] < "2021-03-01"])   # drops a second leg
+    pd.testing.assert_frame_equal(full.loc[cut.index, bf.ALLOWED_FEATURES], cut[bf.ALLOWED_FEATURES])
+
+
+def test_feature_table_changing_a_first_leg_only_affects_later_matches():
+    matches_ = knockout_matches()
+    base = bf.build_feature_table(matches_)
+    changed = matches_.copy()
+    changed.loc[1, ["home_ft", "away_ft"]] = [4, 0]          # 2021 first leg
+    after = bf.build_feature_table(changed)
+    pd.testing.assert_frame_equal(base.loc[:1, bf.ALLOWED_FEATURES], after.loc[:1, bf.ALLOWED_FEATURES])
+    assert after.loc[2, "first_leg_goal_diff"] == -4           # the second leg sees the new score
+
+
+def test_feature_table_round_trip(tmp_path):
+    table = bf.build_feature_table(knockout_matches())
+    path = tmp_path / bf.FEATURE_TABLE_FILE
+    table.to_csv(path, index=False)
+    loaded = bf.load_feature_table(path)
+    pd.testing.assert_frame_equal(table.reset_index(drop=True), loaded, check_dtype=False)
+    assert loaded["result"].dtype == bf.RESULT_DTYPE and loaded["away_goals_rule"].dtype == bool

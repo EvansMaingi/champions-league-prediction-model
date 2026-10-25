@@ -230,6 +230,41 @@ Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
   used until their licence and the timing of their dates (a rating published after a
   match must never be used for it) have been checked.
 
+### Part C: context features (`build_features.add_context_features`)
+
+| Feature | Known before kickoff? | Decision |
+|---|---|---|
+| `neutral_venue`, `played_abroad` | Yes (competition rules; relocations announced in advance) | Included |
+| `behind_closed_doors` | Yes (crowd rules announced in advance) | Included; rare (118, 5.9%) and False for all 2026-27 matches |
+| `stage` | Yes | Included; one-hot encoded in the Milestone 7 Pipeline |
+| `leg_type` | Yes | Included: "1", "2", "single", "none" (original `leg` kept unchanged) |
+| `first_leg_goal_diff`, `first_leg_away_goals` | Yes: leg 1 always finished at least 5 days earlier (median 8; 164 days in 2019-20) | Included for the 220 second legs, missing otherwise |
+| `away_goals_rule` | Yes (competition rule, up to 2020-21) | Included: True for 134 second legs |
+| Rest days | Only partly: domestic matches in between are not in the data | **Dropped**: home and away rest equal in 83% of matches and within 1 day in 97% (a Tuesday/Wednesday calendar effect); the season-start gap is covered by `form_n_season` |
+| Head-to-head | Yes | **Dropped**: 42% of matches are a pair's first meeting; 98% of single earlier meetings were the same-season reverse fixture, already in both form windows; only 290 matches have a pair that met in an earlier season, dominated by a few big-club pairs (Man City v Real Madrid: 17 meetings) |
+
+- **Away goals encoding:** raw facts plus a flag (option 2 of 3). `first_leg_away_goals`
+  matters only when `away_goals_rule` is True; tree models can learn that interaction,
+  and an explicit interaction term can be added for logistic regression in Milestone 7.
+- **Value is tested later:** Milestones 7-8 compare validation log loss with and without
+  each feature group (ablation). Second-leg features affect only 220 matches, so expect
+  wide confidence intervals.
+
+### Final Milestone 5 feature table (`data/processed/features.csv`)
+
+- 1,997 matches; identifiers (`season`, `date`, `kickoff_utc`, `stage`, `tie_id`,
+  `home_team`, `away_team`), the target `result`, and **25 allowed features**:
+  12 form, 5 Elo, 8 context (`ALLOWED_FEATURES`). Load with `build_features.load_feature_table`.
+- **Not allowed:** `season` (per-season memorisation, useless for a new season); team names
+  and countries (identity; a Milestone 7 experiment with unknown-team handling);
+  `stage_raw`, `neutral_reason` (redundant); rest days and head-to-head (dropped above).
+- Missing values: form 50 home / 58 away (cold starts); first-leg features 1,777 (not a
+  second leg). Nothing else is missing.
+- Leakage tests on the complete table: truncation at 3 cut-offs identical for all 25
+  features; perturbing a first leg changes no earlier row, and changes the second leg's
+  first-leg features; the largest absolute correlation of any single feature with the
+  home side's points is 0.395 (`elo_diff`), so no feature mirrors the target.
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's
@@ -242,3 +277,7 @@ Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
   Pipeline, fitted on training data only, and the `*_has_history` flags are kept so the
   model knows a value was imputed. `HistGradientBoostingClassifier` handles NaN natively
   and needs no imputation.
+- **Milestone 9: venue flags for upcoming fixtures.** football-data.org matches have no venue
+  field, so `played_abroad` (e.g. Shakhtar Donetsk, which has played home matches abroad
+  since 2022 and is in 2026-27) and `neutral_venue` must come from a verified source, not
+  the fixture feed; if unverified, the prediction is flagged.

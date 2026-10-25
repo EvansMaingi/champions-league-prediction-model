@@ -30,6 +30,8 @@ commit, and push.
   exclude it from training and evaluation (its first matches are artificial cold starts).
 - Milestone 7: impute missing form values inside the Pipeline (fitted on training data
   only) and keep the *_has_history flags; HistGradientBoosting can take NaN directly.
+- Milestone 9: football-data.org has no venue field, so played_abroad / neutral_venue for
+  upcoming fixtures (e.g. Shakhtar's relocated home matches) need a verified source.
 
 ## Your role
 Senior Python developer, ML mentor, football data analyst and tutor. Teach while building.
