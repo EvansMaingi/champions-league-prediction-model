@@ -29,17 +29,30 @@ assert_valid_features(features, allowed) is the gate for model inputs: a feature
 on the allowlist that Milestone 5 will declare AND have an explicit pre-match role.
 A column without a role fails, so a new derived name cannot slip through unclassified.
 
-TODO (Milestone 5, leakage rules):
-- Rolling features use only EARLIER matches: sort chronologically and shift so a match
-  never influences its own features; handle teams with little history explicitly.
-- Post-match columns may enter features only through earlier matches
-  (e.g. goals scored over the last FORM_WINDOW matches).
-- For a second leg, the first-leg score is legitimate pre-match information.
-- Before 2021-22 the away goals rule applied, so "level after leg 1" meant more than
-  goal difference.
+Features (Milestone 5)
+----------------------
+Part A, recent form (add_form_features): from a long per-team log, each team's mean
+points, goals scored and goals conceded over its previous FORM_WINDOW CL matches, via
+shift(1) + rolling, so a match never sees its own result. form_n counts the matches the
+window used, form_n_season how many are from the current season; no history gives
+missing values and *_has_history = False. Two tests guard this: removing later matches
+must not change earlier features (catches leaks from the future), and changing a
+match's score must not change its own or earlier features (catches a missing shift).
+Note for Milestone 6: the data starts in 2011-12, so clubs' first matches that season
+look like cold starts although they had earlier CL history (left-censoring).
+
+TODO (Parts B and C):
+- Part B: Champions-League-only Elo, using the PRE-match rating.
+- Part C: context features; for a second leg, the first-leg score is legitimate
+  pre-match information (before 2021-22 the away goals rule applied, so "level after
+  leg 1" meant more than goal difference).
 """
 
+from typing import Literal
+
 import pandas as pd
+
+from src.config import FORM_WINDOW
 
 TARGET = "result"
 RESULT_CLASSES = ["H", "D", "A"]
@@ -70,7 +83,16 @@ IDENTIFIERS = [
 # Features created in this module (Milestone 5) are registered here, one entry per
 # column, next to the code that builds them. Registering a name declares that it is
 # computed only from information available before kickoff.
-DERIVED_PRE_MATCH: list[str] = []
+# Part A (add_form_features): form over each team's previous FORM_WINDOW CL matches.
+FORM_FEATURES: list[str] = [
+    f"{side}_{name}"
+    for side in ("home", "away")
+    for name in ("form_points", "form_goals_for", "form_goals_against", "form_n", "form_n_season", "has_history")
+]
+DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES]
+
+# Allowlist of model inputs, declared part by part (Milestone 5).
+ALLOWED_FEATURES: list[str] = [*FORM_FEATURES]
 
 COLUMN_ROLES: dict[str, str] = {
     **{column: "pre_match" for column in PRE_MATCH},
@@ -152,6 +174,90 @@ def result_counts(df: pd.DataFrame) -> pd.DataFrame:
     """Count and share of each class, in H, D, A order."""
     counts = df[TARGET].value_counts().reindex(RESULT_CLASSES)
     return pd.DataFrame({"matches": counts, "share": (counts / counts.sum()).round(4)})
+
+
+# --- Part A: team match log and recent form (Milestone 5) --------------------------
+
+FORM_STATS = {"points": "form_points", "goals_for": "form_goals_for", "goals_against": "form_goals_against"}
+FormScope = Literal["carry_over", "season_reset"]
+
+
+def team_match_log(df: pd.DataFrame) -> pd.DataFrame:
+    """Reshape matches into one row per team per match, from that team's point of view.
+
+    Columns: match_index (the match's index in df), season, date, kickoff_utc, team,
+    opponent, is_home (listed first), goals_for, goals_against, points (3/1/0 from the
+    90-minute score). Sorted by team, then kickoff time.
+
+    These per-match values are POST-match facts; they may only be used through
+    shift(1), i.e. for the team's LATER matches.
+    """
+    columns = ["season", "date", "kickoff_utc"]
+    sides = []
+    for side, other, is_home in (("home", "away", True), ("away", "home", False)):
+        part = df[columns].copy()
+        part["match_index"] = df.index
+        part["team"] = df[f"{side}_team"]
+        part["opponent"] = df[f"{other}_team"]
+        part["is_home"] = is_home
+        part["goals_for"] = df[f"{side}_ft"].astype(int)
+        part["goals_against"] = df[f"{other}_ft"].astype(int)
+        sides.append(part)
+    log = pd.concat(sides, ignore_index=True)
+    log["points"] = 0
+    log.loc[log["goals_for"] > log["goals_against"], "points"] = 3
+    log.loc[log["goals_for"] == log["goals_against"], "points"] = 1
+    return log.sort_values(["team", "kickoff_utc", "match_index"], kind="stable").reset_index(drop=True)
+
+
+def add_rolling_form(log: pd.DataFrame, window: int = FORM_WINDOW, scope: FormScope = "carry_over") -> pd.DataFrame:
+    """Add form over each team's previous `window` matches, using EARLIER matches only.
+
+    For every row: shift(1) within the team, then a rolling mean over up to `window`
+    earlier matches, so a match never sees its own result.
+
+    Args:
+        scope: "carry_over" uses the last `window` CL matches whatever the season;
+            "season_reset" only uses matches from the same season.
+
+    Adds:
+        form_points, form_goals_for, form_goals_against: means over the window
+            (missing when there is no earlier match);
+        form_n: number of earlier matches actually in the window (0..window);
+        form_n_season: how many of those are from the current season.
+    """
+    out = log.sort_values(["team", "kickoff_utc", "match_index"], kind="stable").copy()
+    keys = ["team"] if scope == "carry_over" else ["team", "season"]
+    groups = out.groupby(keys, sort=False)
+    for stat, name in FORM_STATS.items():
+        out[name] = groups[stat].transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
+    out["form_n"] = groups["points"].transform(
+        lambda s: s.shift(1).rolling(window, min_periods=1).count()).fillna(0).astype(int)
+    # How many of the window's matches are from this season: compare each earlier
+    # match's season (lags 1..window) with the current season.
+    same_season = 0
+    for lag in range(1, window + 1):
+        earlier = groups["season"].shift(lag)
+        same_season = same_season + (earlier == out["season"]).astype(int)
+    out["form_n_season"] = same_season
+    return out
+
+
+def add_form_features(df: pd.DataFrame, window: int = FORM_WINDOW, scope: FormScope = "carry_over") -> pd.DataFrame:
+    """Add home_* and away_* form features (and has_history flags) to each match.
+
+    Teams without earlier matches get missing form values and *_has_history = False;
+    nothing is invented.
+    """
+    form = add_rolling_form(team_match_log(df), window, scope)
+    columns = [*FORM_STATS.values(), "form_n", "form_n_season"]
+    out = df.copy()
+    for side, is_home in (("home", True), ("away", False)):
+        part = form[form["is_home"] == is_home].set_index("match_index")[columns]
+        part = part.rename(columns=lambda c: f"{side}_{c}")
+        out = out.join(part)
+        out[f"{side}_has_history"] = out[f"{side}_form_n"] > 0
+    return out
 
 
 if __name__ == "__main__":

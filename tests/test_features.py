@@ -146,3 +146,113 @@ def test_unclassified_name_on_allowlist_alone_fails():
 def test_identifier_cannot_be_a_feature():
     with pytest.raises(ValueError, match="not pre-match features: \\['date'\\]"):
         bf.assert_valid_features(["date"], allowed_columns=["date"])
+
+
+# --- Part A: team match log and recent form -----------------------------------------
+
+def matches(rows: list[tuple]) -> pd.DataFrame:
+    """Match table from (season, date, home, away, home_ft, away_ft); kickoff 20:00 UTC."""
+    df = pd.DataFrame(rows, columns=["season", "date", "home_team", "away_team", "home_ft", "away_ft"])
+    df["date"] = pd.to_datetime(df["date"])
+    df["kickoff_utc"] = (df["date"] + pd.Timedelta(hours=20)).dt.tz_localize("UTC")
+    df[["home_ft", "away_ft"]] = df[["home_ft", "away_ft"]].astype("Int64")
+    return df
+
+
+# Team A plays five matches; B, C, D are opponents. A's points: 3, 0, 1, 3, 3.
+SEQUENCE = matches([
+    ("2020-21", "2020-10-01", "A", "B", 2, 0),
+    ("2020-21", "2020-10-08", "C", "A", 1, 0),
+    ("2020-21", "2020-10-15", "A", "D", 1, 1),
+    ("2021-22", "2021-09-14", "B", "A", 0, 3),
+    ("2021-22", "2021-09-21", "A", "C", 4, 2),
+])
+
+
+def team_rows(form: pd.DataFrame, team: str) -> pd.DataFrame:
+    return form[form["team"] == team].reset_index(drop=True)
+
+
+def test_team_match_log_has_two_rows_per_match_from_each_perspective():
+    log = bf.team_match_log(SEQUENCE)
+    assert len(log) == 2 * len(SEQUENCE)
+    first = log[log["match_index"] == 0].set_index("team")
+    assert (first.loc["A", "goals_for"], first.loc["A", "goals_against"], first.loc["A", "points"]) == (2, 0, 3)
+    assert (first.loc["B", "goals_for"], first.loc["B", "goals_against"], first.loc["B", "points"]) == (0, 2, 0)
+    assert bool(first.loc["A", "is_home"]) and not bool(first.loc["B", "is_home"])
+
+
+def test_rolling_form_uses_only_earlier_matches():
+    a = team_rows(bf.add_rolling_form(bf.team_match_log(SEQUENCE)), "A")
+    assert a["form_points"].isna().iloc[0]                    # first match: no history
+    assert a["form_points"].iloc[1:].round(3).tolist() == [3.0, 1.5, 1.333, 1.75]
+    assert a["form_n"].tolist() == [0, 1, 2, 3, 4]
+    assert a["form_goals_for"].iloc[4] == pytest.approx((2 + 0 + 1 + 3) / 4)
+
+
+def test_rolling_form_window_drops_the_oldest_match():
+    a = team_rows(bf.add_rolling_form(bf.team_match_log(SEQUENCE), window=2), "A")
+    assert a["form_points"].iloc[4] == pytest.approx((1 + 3) / 2)   # only matches 3 and 4
+    assert a["form_n"].max() == 2
+
+
+def test_rolling_form_never_mixes_teams():
+    c = team_rows(bf.add_rolling_form(bf.team_match_log(SEQUENCE)), "C")
+    assert c["form_points"].isna().iloc[0] and c["form_points"].iloc[1] == 3.0  # C's own win only
+
+
+def test_season_scope_and_form_n_season():
+    carry = team_rows(bf.add_rolling_form(bf.team_match_log(SEQUENCE), scope="carry_over"), "A")
+    reset = team_rows(bf.add_rolling_form(bf.team_match_log(SEQUENCE), scope="season_reset"), "A")
+    assert carry["form_n"].iloc[3] == 3 and carry["form_n_season"].iloc[3] == 0   # all from last season
+    assert carry["form_n_season"].iloc[4] == 1
+    assert pd.isna(reset["form_points"].iloc[3]) and reset["form_n"].iloc[3] == 0  # new season, no history
+
+
+def test_cold_start_gives_missing_values_and_flag():
+    df = bf.add_form_features(SEQUENCE)
+    assert pd.isna(df.loc[0, "home_form_points"]) and not df.loc[0, "home_has_history"]
+    assert df.loc[2, "home_has_history"] and not df.loc[2, "away_has_history"]   # D's first match
+
+
+def test_features_unchanged_when_later_matches_are_removed():
+    """Truncation test: catches leakage from LATER matches."""
+    full = bf.add_form_features(SEQUENCE)
+    cut = bf.add_form_features(SEQUENCE[SEQUENCE["date"] < "2021-09-15"])
+    columns = [c for c in bf.FORM_FEATURES]
+    pd.testing.assert_frame_equal(full.loc[cut.index, columns], cut[columns])
+
+
+def test_changing_a_score_only_affects_later_matches():
+    """Perturbation test: catches a match leaking ITS OWN result (a missing shift)."""
+    columns = [c for c in bf.FORM_FEATURES]
+    base = bf.add_form_features(SEQUENCE)
+    changed = SEQUENCE.copy()
+    changed.loc[2, ["home_ft", "away_ft"]] = [9, 0]
+    after = bf.add_form_features(changed)
+    pd.testing.assert_frame_equal(base.loc[:2, columns], after.loc[:2, columns])  # itself and earlier
+    assert not base.loc[3:, columns].equals(after.loc[3:, columns])                  # later matches see it
+
+
+def test_hand_worked_bayern_example():
+    """Bayern's real last five before PSG v Bayern, 28 April 2026 (semi-final, first leg)."""
+    bayern = matches([
+        ("2025-26", "2026-01-28", "PSV Eindhoven", "Bayern Munich", 1, 2),
+        ("2025-26", "2026-03-10", "Atalanta", "Bayern Munich", 1, 6),
+        ("2025-26", "2026-03-18", "Bayern Munich", "Atalanta", 4, 1),
+        ("2025-26", "2026-04-07", "Real Madrid", "Bayern Munich", 1, 2),
+        ("2025-26", "2026-04-15", "Bayern Munich", "Real Madrid", 4, 3),
+        ("2025-26", "2026-04-28", "Paris Saint-Germain", "Bayern Munich", 5, 4),
+    ])
+    row = bf.add_form_features(bayern).iloc[-1]
+    assert row["away_form_points"] == 3.0
+    assert row["away_form_goals_for"] == pytest.approx(18 / 5)
+    assert row["away_form_goals_against"] == pytest.approx(7 / 5)
+    assert (row["away_form_n"], row["away_form_n_season"]) == (5, 5)
+
+
+def test_part_a_features_are_registered_and_allowed():
+    bf.assert_valid_features(bf.FORM_FEATURES, bf.ALLOWED_FEATURES)
+    assert set(bf.FORM_FEATURES) <= set(bf.DERIVED_PRE_MATCH)
+    produced = [c for c in bf.add_form_features(SEQUENCE).columns if c.startswith(("home_form", "away_form")) or c.endswith("has_history")]
+    assert sorted(produced) == sorted(bf.FORM_FEATURES)
