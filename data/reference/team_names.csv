@@ -1,13 +1,13 @@
 source,source_id,source_name,country,standard_name,wikipedia_article,evidence
 openfootball,,1. FC Union Berlin,GER,Union Berlin,1. FC Union Berlin,date+country match: 6/6 matches
-openfootball,,1899 Hoffenheim,GER,TSG Hoffenheim,TSG 1899 Hoffenheim,date+country match: 6/6 matches
+openfootball,,1899 Hoffenheim,GER,TSG 1899 Hoffenheim,TSG 1899 Hoffenheim,date+country match: 6/6 matches
 openfootball,,AC Milan,ITA,Milan,AC Milan,date+country match: 52/52 matches
 openfootball,,AC Sparta Praha,CZE,Sparta Prague,AC Sparta Prague,date+country match: 8/8 matches
 openfootball,,AEK Athen,GRE,AEK Athens,AEK Athens F.C.,date+country match: 6/6 matches
 openfootball,,AFC Ajax,NED,Ajax,AFC Ajax,date+country match: 66/66 matches
 openfootball,,APOEL Nikosia,CYP,APOEL,APOEL FC,date+country match: 20/20 matches
 openfootball,,AS Monaco,FRA,Monaco,AS Monaco FC,date+country match: 29/29 matches
-openfootball,,AS Monaco FC,MCO,Monaco,AS Monaco FC,date+country match: 18/18 matches
+openfootball,,AS Monaco FC,FRA,Monaco,AS Monaco FC,date+country match: 18/18 matches
 openfootball,,AS Roma,ITA,Roma,AS Roma,date+country match: 29/29 matches
 openfootball,,Arsenal FC,ENG,Arsenal,Arsenal F.C.,date+country match: 73/73 matches
 openfootball,,Aston Villa FC,ENG,Aston Villa,Aston Villa F.C.,date+country match: 10/10 matches
@@ -18,8 +18,8 @@ openfootball,,Atlético Madrid,ESP,Atlético Madrid,Atlético Madrid,date+countr
 openfootball,,Austria Wien,AUT,Austria Wien,FK Austria Wien,date+country match: 6/6 matches
 openfootball,,BATE Borisov,BLR,BATE Borisov,FC BATE Borisov,date+country match: 24/24 matches
 openfootball,,BSC Young Boys,SUI,Young Boys,BSC Young Boys,date+country match: 26/26 matches
-openfootball,,Bayer 04 Leverkusen,GER,Bayer Leverkusen,Bayer 04 Leverkusen,date+country match: 19/19 matches
-openfootball,,Bayer Leverkusen,GER,Bayer Leverkusen,Bayer 04 Leverkusen,date+country match: 46/46 matches
+openfootball,,Bayer 04 Leverkusen,GER,Bayer 04 Leverkusen,Bayer 04 Leverkusen,date+country match: 19/19 matches
+openfootball,,Bayer Leverkusen,GER,Bayer 04 Leverkusen,Bayer 04 Leverkusen,date+country match: 46/46 matches
 openfootball,,Bayern München,GER,Bayern Munich,FC Bayern Munich,date+country match: 105/105 matches
 openfootball,,Beşiktaş,TUR,Beşiktaş,Beşiktaş J.K.,date+country match: 19/19 matches
 openfootball,,Bologna FC 1909,ITA,Bologna,Bologna FC 1909,date+country match: 8/8 matches
@@ -46,7 +46,7 @@ openfootball,,FC Porto,POR,Porto,FC Porto,date+country match: 83/83 matches
 openfootball,,FC Red Bull Salzburg,AUT,Red Bull Salzburg,FC Red Bull Salzburg,date+country match: 14/14 matches
 openfootball,,FC Schalke 04,GER,Schalke 04,FC Schalke 04,date+country match: 28/28 matches
 openfootball,,FC Sheriff,MDA,Sheriff Tiraspol,FC Sheriff Tiraspol,date+country match: 6/6 matches
-openfootball,,FC Steaua Bucureşti,ROU,Steaua București,FCSB,date+country match: 6/6 matches
+openfootball,,FC Steaua Bucureşti,ROU,FCSB,FCSB,date+country match: 6/6 matches
 openfootball,,FK Astana,KAZ,Astana,FC Astana,date+country match: 6/6 matches
 openfootball,,FK Bodø/Glimt,NOR,Bodø/Glimt,FK Bodø/Glimt,date+country match: 10/10 matches
 openfootball,,FK Crvena Zvezda,SRB,Red Star Belgrade,Red Star Belgrade,date+country match: 14/14 matches
@@ -54,7 +54,7 @@ openfootball,,FK Kairat,KAZ,Kairat,FC Kairat,date+country match: 8/8 matches
 openfootball,,FK Krasnodar,RUS,Krasnodar,FC Krasnodar,date+country match: 6/6 matches
 openfootball,,FK Rostov,RUS,Rostov,FC Rostov,date+country match: 6/6 matches
 openfootball,,FK Shakhtar Donetsk,UKR,Shakhtar Donetsk,FC Shakhtar Donetsk,date+country match: 14/14 matches
-openfootball,,Ferencvárosi TC,HUN,Ferencváros,Ferencvárosi TC,date+country match: 6/6 matches
+openfootball,,Ferencvárosi TC,HUN,Ferencvárosi TC,Ferencvárosi TC,date+country match: 6/6 matches
 openfootball,,Feyenoord,NED,Feyenoord,Feyenoord,date+country match: 6/6 matches
 openfootball,,Feyenoord Rotterdam,NED,Feyenoord,Feyenoord,date+country match: 16/16 matches
 openfootball,,GNK Dinamo Zagreb,CRO,Dinamo Zagreb,GNK Dinamo Zagreb,date+country match: 8/8 matches
@@ -74,7 +74,7 @@ openfootball,,Liverpool FC,ENG,Liverpool,Liverpool F.C.,date+country match: 77/7
 openfootball,,Lokomotiv Moskva,RUS,Lokomotiv Moscow,FC Lokomotiv Moscow,date+country match: 18/18 matches
 openfootball,,Maccabi Haifa,ISR,Maccabi Haifa,Maccabi Haifa F.C.,date+country match: 6/6 matches
 openfootball,,Maccabi Tel Aviv,ISR,Maccabi Tel Aviv,Maccabi Tel Aviv F.C.,date+country match: 6/6 matches
-openfootball,,Malmö FF,SWE,Malmö FF,Malmö FF,date+country match: 18/18 matches
+openfootball,,Malmö FF,SWE,Malmö,Malmö FF,date+country match: 18/18 matches
 openfootball,,Manchester City,ENG,Manchester City,Manchester City F.C.,date+country match: 95/95 matches
 openfootball,,Manchester City FC,ENG,Manchester City,Manchester City F.C.,date+country match: 26/26 matches
 openfootball,,Manchester United,ENG,Manchester United,Manchester United F.C.,date+country match: 55/55 matches
@@ -84,9 +84,9 @@ openfootball,,Málaga CF,ESP,Málaga,Málaga CF,date+country match: 8/8 matches
 openfootball,,NK Maribor,SVN,Maribor,NK Maribor,date+country match: 12/12 matches
 openfootball,,Newcastle United FC,ENG,Newcastle United,Newcastle United F.C.,date+country match: 16/16 matches
 openfootball,,Olympiakos Piraeus,GRE,Olympiacos,Olympiacos F.C.,date+country match: 49/49 matches
-openfootball,,Olympique Lyonnais,FRA,Lyon,Olympique Lyonnais,date+country match: 35/35 matches
-openfootball,,Olympique Marseille,FRA,Marseille,Olympique de Marseille,date+country match: 26/26 matches
-openfootball,,Olympique de Marseille,FRA,Marseille,Olympique de Marseille,date+country match: 8/8 matches
+openfootball,,Olympique Lyonnais,FRA,Olympique Lyonnais,Olympique Lyonnais,date+country match: 35/35 matches
+openfootball,,Olympique Marseille,FRA,Olympique de Marseille,Olympique de Marseille,date+country match: 26/26 matches
+openfootball,,Olympique de Marseille,FRA,Olympique de Marseille,Olympique de Marseille,date+country match: 8/8 matches
 openfootball,,Oţelul Galaţi,ROU,Oțelul Galați,ASC Oțelul Galați,date+country match: 6/6 matches
 openfootball,,PAE Olympiakos SFP,GRE,Olympiacos,Olympiacos F.C.,date+country match: 9/9 matches
 openfootball,,PFC Ludogorets Razgrad,BUL,Ludogorets Razgrad,PFC Ludogorets Razgrad,date+country match: 12/12 matches
@@ -106,8 +106,8 @@ openfootball,,Real Madrid,ESP,Real Madrid,Real Madrid CF,date+country match: 109
 openfootball,,Real Madrid CF,ESP,Real Madrid,Real Madrid CF,date+country match: 32/32 matches
 openfootball,,Real Sociedad,ESP,Real Sociedad,Real Sociedad,date+country match: 6/6 matches
 openfootball,,Real Sociedad de Fútbol,ESP,Real Sociedad,Real Sociedad,date+country match: 7/7 matches
-openfootball,,Royal Antwerp FC,BEL,Antwerp,Royal Antwerp FC,date+country match: 6/6 matches
-openfootball,,Royale Union Saint-Gilloise,BEL,Union Saint-Gilloise,Royale Union Saint-Gilloise,date+country match: 8/8 matches
+openfootball,,Royal Antwerp FC,BEL,Royal Antwerp,Royal Antwerp FC,date+country match: 6/6 matches
+openfootball,,Royale Union Saint-Gilloise,BEL,Royale Union Saint-Gilloise,Royale Union Saint-Gilloise,date+country match: 8/8 matches
 openfootball,,SK Slavia Praha,CZE,Slavia Prague,SK Slavia Prague,date+country match: 8/8 matches
 openfootball,,SK Sturm Graz,AUT,Sturm Graz,SK Sturm Graz,date+country match: 8/8 matches
 openfootball,,SL Benfica,POR,Benfica,S.L. Benfica,date+country match: 75/75 matches
@@ -122,8 +122,8 @@ openfootball,,Sporting Braga,POR,Braga,S.C. Braga,date+country match: 6/6 matche
 openfootball,,Sporting CP,POR,Sporting CP,Sporting CP,date+country match: 31/31 matches
 openfootball,,Sporting Clube de Braga,POR,Braga,S.C. Braga,date+country match: 6/6 matches
 openfootball,,Sporting Clube de Portugal,POR,Sporting CP,Sporting CP,date+country match: 19/19 matches
-openfootball,,Stade Brestois 29,FRA,Brest,Stade Brestois 29,date+country match: 9/9 matches
-openfootball,,Stade Rennais,FRA,Rennes,Stade Rennais FC,date+country match: 6/6 matches
+openfootball,,Stade Brestois 29,FRA,Stade Brestois 29,Stade Brestois 29,date+country match: 9/9 matches
+openfootball,,Stade Rennais,FRA,Stade Rennais,Stade Rennais FC,date+country match: 6/6 matches
 openfootball,,Tottenham Hotspur,ENG,Tottenham Hotspur,Tottenham Hotspur F.C.,date+country match: 37/37 matches
 openfootball,,Tottenham Hotspur FC,ENG,Tottenham Hotspur,Tottenham Hotspur F.C.,date+country match: 9/9 matches
 openfootball,,Trabzonspor,TUR,Trabzonspor,Trabzonspor,date+country match: 6/6 matches
@@ -135,39 +135,39 @@ openfootball,,Villarreal CF,ESP,Villarreal,Villarreal CF,date+country match: 23/
 openfootball,,Zenit St. Petersburg,RUS,Zenit Saint Petersburg,FC Zenit Saint Petersburg,date+country match: 51/51 matches
 openfootball,,İstanbul Başakşehir,TUR,İstanbul Başakşehir,İstanbul Başakşehir F.K.,date+country match: 6/6 matches
 openfootball,,ŠK Slovan Bratislava,SVK,Slovan Bratislava,ŠK Slovan Bratislava,date+country match: 8/8 matches
-football-data.org,100,AS Roma,,Roma,AS Roma,fixture schedule match: similarity 1.0
-football-data.org,57,Arsenal FC,,Arsenal,Arsenal F.C.,fixture schedule match: similarity 1.0
-football-data.org,58,Aston Villa FC,,Aston Villa,Aston Villa F.C.,fixture schedule match: similarity 1.0
-football-data.org,4,Borussia Dortmund,,Borussia Dortmund,Borussia Dortmund,fixture schedule match: similarity 1.0
-football-data.org,78,Club Atlético de Madrid,,Atlético Madrid,Atlético Madrid,fixture schedule match: similarity 1.0
-football-data.org,851,Club Brugge KV,,Club Brugge,Club Brugge KV,fixture schedule match: similarity 1.0
-football-data.org,7397,Como 1907,,Como,Como 1907,fixture schedule match: similarity 1.0
-football-data.org,81,FC Barcelona,,Barcelona,FC Barcelona,fixture schedule match: similarity 1.0
-football-data.org,5,FC Bayern München,,Bayern Munich,FC Bayern Munich,fixture schedule match: similarity 1.0
-football-data.org,108,FC Internazionale Milano,,Inter Milan,Inter Milan,fixture schedule match: similarity 1.0
-football-data.org,503,FC Porto,,Porto,FC Porto,fixture schedule match: similarity 1.0
-football-data.org,5721,FK Bodø/Glimt,,Bodø/Glimt,FK Bodø/Glimt,fixture schedule match: similarity 1.0
-football-data.org,1887,FK Shakhtar Donetsk,,Shakhtar Donetsk,FC Shakhtar Donetsk,fixture schedule match: similarity 1.0
-football-data.org,613,Fenerbahçe SK,,Fenerbahçe,Fenerbahçe S.K. (football),fixture schedule match: similarity 1.0
-football-data.org,675,Feyenoord Rotterdam,,Feyenoord,Feyenoord,fixture schedule match: similarity 1.0
-football-data.org,610,Galatasaray SK,,Galatasaray,Galatasaray S.K. (football),fixture schedule match: similarity 1.0
-football-data.org,2016,LASK Linz,,LASK,LASK,fixture schedule match: similarity 1.0
-football-data.org,521,Lille OSC,,Lille,Lille OSC,fixture schedule match: similarity 1.0
-football-data.org,64,Liverpool FC,,Liverpool,Liverpool F.C.,fixture schedule match: similarity 1.0
-football-data.org,65,Manchester City FC,,Manchester City,Manchester City F.C.,fixture schedule match: similarity 1.0
-football-data.org,66,Manchester United FC,,Manchester United,Manchester United F.C.,fixture schedule match: similarity 1.0
-football-data.org,1899,PAE AEK,,AEK Athens,AEK Athens F.C.,fixture schedule match: similarity 1.0
-football-data.org,674,PSV,,PSV Eindhoven,PSV Eindhoven,fixture schedule match: similarity 1.0
-football-data.org,524,Paris Saint-Germain FC,,Paris Saint-Germain,Paris Saint-Germain FC,fixture schedule match: similarity 1.0
-football-data.org,721,RB Leipzig,,RB Leipzig,RB Leipzig,fixture schedule match: similarity 1.0
-football-data.org,546,Racing Club de Lens,,Lens,RC Lens,fixture schedule match: similarity 1.0
-football-data.org,90,Real Betis Balompié,,Real Betis,Real Betis,fixture schedule match: similarity 1.0
-football-data.org,86,Real Madrid CF,,Real Madrid,Real Madrid CF,fixture schedule match: similarity 1.0
-football-data.org,930,SK Slavia Praha,,Slavia Prague,SK Slavia Prague,fixture schedule match: similarity 1.0
-football-data.org,113,SSC Napoli,,Napoli,SSC Napoli,fixture schedule match: similarity 1.0
-football-data.org,10233,Sabah FK,,Sabah,Sabah FK (Azerbaijan),fixture schedule match: similarity 1.0
-football-data.org,498,Sporting Clube de Portugal,,Sporting CP,Sporting CP,fixture schedule match: similarity 1.0
-football-data.org,10,VfB Stuttgart,,VfB Stuttgart,VfB Stuttgart,fixture schedule match: similarity 1.0
-football-data.org,5720,Viking FK,,Viking,Viking FK,fixture schedule match: similarity 1.0
-football-data.org,94,Villarreal CF,,Villarreal,Villarreal CF,fixture schedule match: similarity 1.0
-football-data.org,7509,ŠK Slovan Bratislava,,Slovan Bratislava,ŠK Slovan Bratislava,fixture schedule match: similarity 1.0
+football-data.org,100,AS Roma,ITA,Roma,AS Roma,fixture schedule match: similarity 1.0
+football-data.org,57,Arsenal FC,ENG,Arsenal,Arsenal F.C.,fixture schedule match: similarity 1.0
+football-data.org,58,Aston Villa FC,ENG,Aston Villa,Aston Villa F.C.,fixture schedule match: similarity 1.0
+football-data.org,4,Borussia Dortmund,GER,Borussia Dortmund,Borussia Dortmund,fixture schedule match: similarity 1.0
+football-data.org,78,Club Atlético de Madrid,ESP,Atlético Madrid,Atlético Madrid,fixture schedule match: similarity 1.0
+football-data.org,851,Club Brugge KV,BEL,Club Brugge,Club Brugge KV,fixture schedule match: similarity 1.0
+football-data.org,7397,Como 1907,ITA,Como,Como 1907,"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,81,FC Barcelona,ESP,Barcelona,FC Barcelona,fixture schedule match: similarity 1.0
+football-data.org,5,FC Bayern München,GER,Bayern Munich,FC Bayern Munich,fixture schedule match: similarity 1.0
+football-data.org,108,FC Internazionale Milano,ITA,Inter Milan,Inter Milan,fixture schedule match: similarity 1.0
+football-data.org,503,FC Porto,POR,Porto,FC Porto,fixture schedule match: similarity 1.0
+football-data.org,5721,FK Bodø/Glimt,NOR,Bodø/Glimt,FK Bodø/Glimt,fixture schedule match: similarity 1.0
+football-data.org,1887,FK Shakhtar Donetsk,UKR,Shakhtar Donetsk,FC Shakhtar Donetsk,fixture schedule match: similarity 1.0
+football-data.org,613,Fenerbahçe SK,TUR,Fenerbahçe,Fenerbahçe S.K. (football),"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,675,Feyenoord Rotterdam,NED,Feyenoord,Feyenoord,fixture schedule match: similarity 1.0
+football-data.org,610,Galatasaray SK,TUR,Galatasaray,Galatasaray S.K. (football),fixture schedule match: similarity 1.0
+football-data.org,2016,LASK Linz,AUT,LASK,LASK,"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,521,Lille OSC,FRA,Lille,Lille OSC,fixture schedule match: similarity 1.0
+football-data.org,64,Liverpool FC,ENG,Liverpool,Liverpool F.C.,fixture schedule match: similarity 1.0
+football-data.org,65,Manchester City FC,ENG,Manchester City,Manchester City F.C.,fixture schedule match: similarity 1.0
+football-data.org,66,Manchester United FC,ENG,Manchester United,Manchester United F.C.,fixture schedule match: similarity 1.0
+football-data.org,1899,PAE AEK,GRE,AEK Athens,AEK Athens F.C.,fixture schedule match: similarity 1.0
+football-data.org,674,PSV,NED,PSV Eindhoven,PSV Eindhoven,fixture schedule match: similarity 1.0
+football-data.org,524,Paris Saint-Germain FC,FRA,Paris Saint-Germain,Paris Saint-Germain FC,fixture schedule match: similarity 1.0
+football-data.org,721,RB Leipzig,GER,RB Leipzig,RB Leipzig,fixture schedule match: similarity 1.0
+football-data.org,546,Racing Club de Lens,FRA,Lens,RC Lens,fixture schedule match: similarity 1.0
+football-data.org,90,Real Betis Balompié,ESP,Real Betis,Real Betis,"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,86,Real Madrid CF,ESP,Real Madrid,Real Madrid CF,fixture schedule match: similarity 1.0
+football-data.org,930,SK Slavia Praha,CZE,Slavia Prague,SK Slavia Prague,fixture schedule match: similarity 1.0
+football-data.org,113,SSC Napoli,ITA,Napoli,SSC Napoli,fixture schedule match: similarity 1.0
+football-data.org,10233,Sabah FK,AZE,Sabah,Sabah FK (Azerbaijan),"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,498,Sporting Clube de Portugal,POR,Sporting CP,Sporting CP,fixture schedule match: similarity 1.0
+football-data.org,10,VfB Stuttgart,GER,VfB Stuttgart,VfB Stuttgart,fixture schedule match: similarity 1.0
+football-data.org,5720,Viking FK,NOR,Viking,Viking FK,"fixture schedule match: similarity 1.0; no history, country entered by hand"
+football-data.org,94,Villarreal CF,ESP,Villarreal,Villarreal CF,fixture schedule match: similarity 1.0
+football-data.org,7509,ŠK Slovan Bratislava,SVK,Slovan Bratislava,ŠK Slovan Bratislava,fixture schedule match: similarity 1.0

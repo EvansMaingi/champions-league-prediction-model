@@ -149,6 +149,30 @@ def test_build_match_context_reasons_and_evidence():
     ])
     context = reference.build_match_context(matched)
     assert len(context) == 4  # the ordinary 2021-22 match is not listed
-    assert context["neutral_reason"].tolist() == ["final", "lisbon_final_8", "played_abroad", ""]
-    assert context["neutral_evidence"].tolist() == ["rule", "rule", "Wikipedia stadium field", ""]
+    assert context["neutral_venue"].tolist() == [True, True, False, False]
+    assert context["neutral_reason"].tolist() == ["final", "lisbon_final_8", "", ""]
+    assert context["neutral_evidence"].tolist() == ["rule", "rule", "", ""]
+    assert context["played_abroad"].tolist() == [False, False, True, False]
+    assert context["abroad_evidence"].tolist() == ["", "", "Wikipedia stadium field", ""]
     assert context["behind_closed_doors"].tolist() == [False, True, True, True]
+
+
+@pytest.mark.parametrize("title, standard", [
+    ("FC Bayern Munich", "Bayern Munich"),
+    ("Arsenal F.C.", "Arsenal"),
+    ("Galatasaray S.K. (football)", "Galatasaray"),
+    ("Sabah FK (Azerbaijan)", "Sabah"),
+    ("Bologna FC 1909", "Bologna"),
+    ("Como 1907", "Como"),
+    ("1. FC Union Berlin", "Union Berlin"),
+    ("AS Monaco FC", "Monaco"),
+    ("FCSB", "FCSB"),
+    ("RB Leipzig", "RB Leipzig"),            # RB is part of the name
+    ("PSV Eindhoven", "PSV Eindhoven"),
+    ("FC Schalke 04", "Schalke 04"),          # "04" is not a founding year
+    ("TSG 1899 Hoffenheim", "TSG 1899 Hoffenheim"),
+    ("Ferencvárosi TC", "Ferencvárosi TC"),  # TC deliberately kept
+    ("Inter Milan", "Inter Milan"),
+])
+def test_standard_name_from_title(title, standard):
+    assert reference.standard_name_from_title(title) == standard

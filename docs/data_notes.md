@@ -52,14 +52,18 @@ openfootball's kickoff times are **Central European Time / Central European Summ
 
 ## Venue and crowd context (`data/reference/match_context.csv`, 142 rows)
 
+Two separate venue flags: `neutral_venue` means *neither* side is at home; `played_abroad`
+means the listed home side relocated to another country (the "away" side may still
+be the stronger-supported one).
+
 | Column | Value | Evidence | Matches |
 |---|---|---|---|
 | `neutral_venue` / `neutral_reason` | `final` | Rule: finals are at a venue chosen in advance | 15 |
 | | `lisbon_final_8` | Rule: 2019-20 quarter- and semi-finals were single matches in Lisbon | 6 |
-| | `played_abroad` | Source data: Wikipedia's stadium field names a country, which it does only when the "home" side played abroad | 17 |
-| | **total neutral** | | **38** |
-| `behind_closed_doors` | `True` | Source data: Wikipedia attendance = 0 | **118** |
-| both | | | 14 |
+| | **total** | | **21** |
+| `played_abroad` | `True` | Source data: Wikipedia's stadium field names a country, which it does only when the "home" side played abroad | **17** |
+| `neutral_venue` and `played_abroad` | | | **0** |
+| `behind_closed_doors` | `True` | Source data: Wikipedia attendance = 0 | **118** (7 also neutral, 7 also played abroad) |
 
 `played_abroad` (17):
 - 2020-21, COVID travel restrictions (7): RB Leipzig v Liverpool and return leg (Budapest),
@@ -103,19 +107,68 @@ Allianz Arena (recorded in the `note` column).
 openfootball switched AS Monaco from `FRA` (2014-15 to 2018-19) to `MCO` (from 2024-25).
 Country codes are treated as UEFA associations, so `MCO` -> `FRA`.
 
-## Team names (`data/reference/team_names.csv`, 172 rows) - proposed, under review
+## Team names (`data/reference/team_names.csv`, 172 rows) - reviewed and applied
 
-- **Identity:** a club is identified by the Wikipedia article its name links to. openfootball
-  names are linked through the matched boxes (date + countries); redirect titles are
-  resolved (e.g. `R.S.C. Anderlecht` = `RSC Anderlecht`). football-data.org teams are linked
-  by fixture schedule (dates + home/away of all 8 league-phase matches): 36 of 36 matched
-  with similarity 1.0.
-- **Standard name convention:** the article's most recent Wikipedia display name, i.e. the
-  common English name (e.g. `Bayern Munich`, `Inter Milan`, `Red Star Belgrade`).
-- **Result:** 136 openfootball names -> 108 clubs (28 clubs had two spellings, mostly from
-  openfootball's switch to official names around 2023-24); plus 6 clubs in 2026-27 with no
-  history (Como, Fenerbahçe, LASK, Real Betis, Sabah, Viking), to be flagged as unknown
-  teams at prediction time.
-- String similarity is not used to decide identity: it scores real variants as low as 0.62
-  and different clubs as high as 0.81.
-- `validate.check_teams_mapped` fails on any name missing from the table.
+**Identity.** A club is identified by the Wikipedia article its name links to, never by
+string similarity (which scores real variants as low as 0.62 and different clubs as high
+as 0.81).
+- openfootball names are linked through the matched boxes (date + countries); redirect
+  titles are resolved (e.g. `R.S.C. Anderlecht` = `RSC Anderlecht`).
+- football-data.org teams are linked by fixture schedule (dates + home/away of all 8
+  league-phase matches): 36 of 36 matched with similarity 1.0.
+
+**Standard name rule** (`reference.standard_name_from_title`). Start from the resolved
+article title and repeat until nothing changes:
+1. drop a trailing disambiguator in parentheses: `Galatasaray S.K. (football)` -> `Galatasaray S.K.`;
+2. drop a trailing founding year 1800-2099: `Bologna FC 1909` -> `Bologna FC`;
+3. drop one of these club-type / legal-form tokens at the start and/or end, as a whole word:
+   `1. FC`, `F.C.`, `FC`, `A.F.C.`, `AFC`, `C.F.`, `CF`, `S.C.`, `SC`, `S.K.`, `SK`, `ŠK`, `F.K.`,
+   `FK`, `NK`, `GNK`, `PFC`, `BSC`, `KRC`, `KAA`, `RSC`, `RC`, `AC`, `AS`, `ASC`, `SS`, `SSC`,
+   `S.L.`, `J.K.`, `BC`, `KV`, `OSC`, `HSC`, `FF`.
+
+Nothing else is changed (spelling, accents, word order). Tokens that are part of a name
+are not on the list (`RB`, `PSV`, `VfB`, `VfL`, `TSG`, `CFR`, `LASK`), and neither is `TC`:
+`Ferencvárosi TC` without it would leave an adjective ("of Ferencváros").
+
+Why titles: the article title is the club's *current* name. A first version used Wikipedia's
+link text, which keeps the name a club had in the article's season: `FC Steaua Bucureşti`
+(2013-14) links to the article **FCSB** (the club's name since 2017; "Steaua București" now
+refers to a different club) but was displayed as "Steaua București". Switching to the
+title rule changed 11 clubs (13 rows):
+
+| Before (link text) | After (title rule) |
+|---|---|
+| Bayer Leverkusen | Bayer 04 Leverkusen |
+| Steaua București | FCSB |
+| Ferencváros | Ferencvárosi TC |
+| Malmö FF | Malmö |
+| Marseille | Olympique de Marseille |
+| Lyon | Olympique Lyonnais |
+| Antwerp | Royal Antwerp |
+| Union Saint-Gilloise | Royale Union Saint-Gilloise |
+| Brest | Stade Brestois 29 |
+| Rennes | Stade Rennais |
+| TSG Hoffenheim | TSG 1899 Hoffenheim |
+
+**Countries.** Every row has a UEFA association code (`validate.validate_team_table` fails
+otherwise). football-data.org rows take the club's openfootball country; the 6 clubs with
+no history were entered by hand: Como ITA, Fenerbahçe TUR, LASK AUT, Real Betis ESP,
+Sabah AZE, Viking NOR.
+
+**Result.** 136 openfootball names -> 108 clubs (28 had two spellings, mostly from
+openfootball's switch to official names around 2023-24), plus 6 clubs in 2026-27 with no
+history, to be flagged as unknown teams at prediction time.
+
+**Checks.** `validate.check_teams_mapped` fails on any name missing from the table;
+`validate.validate_team_table` fails if a row lacks a standard name or country, or if a
+club has more than one country or article, or an article more than one standard name.
+
+## Processed output (`data/processed/matches.csv`)
+
+`python -m src.data.clean` runs: parse -> association codes -> `kickoff_utc` ->
+`ht_inferred` -> match context -> ties -> team names -> `validate.validate_matches`
+(required columns, no duplicates, chronological order, score consistency, shootouts),
+saves the table, then reloads it with `clean.load_clean_matches` and validates it again.
+
+Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
+`home_team_source` / `away_team_source`.

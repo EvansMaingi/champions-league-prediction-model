@@ -327,8 +327,10 @@ def test_add_ht_inferred_leaves_other_missing_values_missing():
 
 
 def context_rows(rows: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame(rows, columns=["season", "date", "home_team", "away_team",
-                                       "neutral_venue", "neutral_reason", "behind_closed_doors"])
+    table = pd.DataFrame(rows, columns=["season", "date", "home_team", "away_team", "neutral_venue",
+                                        "neutral_reason", "played_abroad", "behind_closed_doors"])
+    table["played_abroad"] = table["played_abroad"].fillna(False).astype(bool)
+    return table
 
 
 def test_add_match_context_flags_listed_matches_only():
@@ -342,6 +344,17 @@ def test_add_match_context_flags_listed_matches_only():
     assert df["neutral_venue"].sum() == 1 and df["behind_closed_doors"].sum() == 1
     assert df.loc[df["neutral_venue"], "neutral_reason"].item() == "final"
     assert set(df.loc[~df["neutral_venue"], "neutral_reason"]) == {""}
+    assert not df["played_abroad"].any() and df["played_abroad"].dtype == bool
+
+
+def test_add_match_context_keeps_played_abroad_separate_from_neutral():
+    context = context_rows([
+        {"season": "2015-16", "date": pd.Timestamp("2016-02-16"), "home_team": "Paris Saint-Germain",
+         "away_team": "Chelsea FC", "neutral_venue": False, "neutral_reason": "",
+         "played_abroad": True, "behind_closed_doors": False},
+    ])
+    df = clean.add_match_context(knockout_table(), context)
+    assert df["played_abroad"].sum() == 1 and df["neutral_venue"].sum() == 0
 
 
 def test_add_match_context_rejects_rows_that_match_nothing():
@@ -406,7 +419,88 @@ def test_normalise_team_names_fails_on_unmapped_name():
         clean.normalise_team_names(knockout_table(), {"Paris Saint-Germain": "PSG", "Lyon": "Lyon", "Porto": "Porto"})
 
 
+# --- clean.py: full pipeline -----------------------------------------------------
+
+
+def write_reference(folder, team_rows):
+    """Write a minimal reference folder: team_names.csv and an empty match_context.csv."""
+    folder.mkdir()
+    pd.DataFrame(team_rows, columns=["source", "source_id", "source_name", "country", "standard_name",
+                                     "wikipedia_article", "evidence"]).to_csv(folder / "team_names.csv", index=False)
+    (folder / "match_context.csv").write_text(
+        "season,date,home_team,away_team,neutral_venue,neutral_reason,played_abroad,behind_closed_doors\n",
+        encoding="utf-8")
+
+
+TEAM_ROWS = [
+    ["openfootball", "", "Paris Saint-Germain", "FRA", "Paris Saint-Germain", "Paris Saint-Germain FC", "test"],
+    ["openfootball", "", "Chelsea FC", "ENG", "Chelsea", "Chelsea F.C.", "test"],
+    ["openfootball", "", "Lyon", "FRA", "Olympique Lyonnais", "Olympique Lyonnais", "test"],
+    ["openfootball", "", "Porto", "POR", "Porto", "FC Porto", "test"],
+]
+
+
+def test_clean_matches_end_to_end_saves_and_round_trips(tmp_path):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "2015-16_cl.txt").write_text(KNOCKOUT_SEASON, encoding="utf-8")
+    write_reference(tmp_path / "reference", TEAM_ROWS)
+
+    df = clean.clean_matches(raw, tmp_path / "reference", out_dir=tmp_path / "processed")
+    assert len(df) == 5 and set(df["home_team"]) == {"Paris Saint-Germain", "Chelsea", "Olympique Lyonnais", "Porto"}
+    assert df["ht_inferred"].sum() == 2 and df["tie_id"].nunique() == 3
+
+    saved = clean.load_clean_matches(tmp_path / "processed" / clean.PROCESSED_FILE)
+    validate.validate_matches(saved)
+    assert saved["home_ft"].dtype == "Int64" and saved["neutral_venue"].dtype == bool
+    assert saved["leg"].tolist() == df["leg"].tolist()
+
+
+def test_clean_matches_stops_on_team_table_without_country(tmp_path):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "2015-16_cl.txt").write_text(KNOCKOUT_SEASON, encoding="utf-8")
+    rows = [row.copy() for row in TEAM_ROWS]
+    rows[1][3] = ""  # Chelsea without a country
+    write_reference(tmp_path / "reference", rows)
+    with pytest.raises(ValueError, match="rows without country"):
+        clean.clean_matches(raw, tmp_path / "reference")
+
+
 # --- validate.py ----------------------------------------------------------------
+
+
+def team_table(rows):
+    return pd.DataFrame(rows, columns=["source_name", "country", "standard_name", "wikipedia_article"])
+
+
+def test_validate_team_table_accepts_consistent_table():
+    validate.validate_team_table(team_table([["Bayern München", "GER", "Bayern Munich", "FC Bayern Munich"],
+                                             ["FC Bayern München", "GER", "Bayern Munich", "FC Bayern Munich"]]))
+
+
+@pytest.mark.parametrize("rows, message", [
+    ([["Como 1907", "", "Como", "Como 1907"]], "rows without country"),
+    ([["A", "GER", "Club", "Club A"], ["B", "AUT", "Club", "Club A"]], "more than one country"),
+    ([["A", "GER", "Club", "Club A"], ["B", "GER", "Club", "Club B"]], "more than one wikipedia_article"),
+    ([["A", "GER", "Club A", "Article"], ["B", "GER", "Club B", "Article"]], "more than one standard_name"),
+])
+def test_validate_team_table_rejects_problems(rows, message):
+    with pytest.raises(ValueError, match=message):
+        validate.validate_team_table(team_table(rows))
+
+
+def test_validate_matches_rejects_missing_column_duplicates_and_unsorted():
+    df = clean.add_ties(clean.add_match_context(clean.add_ht_inferred(clean.add_kickoff_utc(knockout_table())),
+                                                context_rows([])))
+    validate.validate_matches(df)  # passes
+    with pytest.raises(ValueError, match="Missing columns"):
+        validate.validate_matches(df.drop(columns="leg"))
+    with pytest.raises(ValueError, match="Duplicate"):
+        validate.check_no_duplicate_matches(pd.concat([df, df.iloc[[0]]]))
+    with pytest.raises(ValueError, match="chronologically"):
+        validate.check_chronological(df.iloc[::-1])
+
 
 
 def test_check_teams_mapped_lists_every_missing_name():

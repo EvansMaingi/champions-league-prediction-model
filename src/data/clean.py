@@ -24,8 +24,8 @@ Step 2 - cleaning decisions from EDA (each documented in docs/data_notes.md):
 - A missing half-time score occurs only when the match ended 0-0, so it is filled
   with 0-0 and marked `ht_inferred`. Half-time scores are post-kickoff data: they may
   only feed rolling features built from EARLIER matches, never the current match.
-- Venue and crowd context (`neutral_venue`, `neutral_reason`, `behind_closed_doors`)
-  comes from the reviewed table data/reference/match_context.csv.
+- Venue and crowd context (`neutral_venue`, `neutral_reason`, `played_abroad`,
+  `behind_closed_doors`) comes from the reviewed table data/reference/match_context.csv.
 - Knockout matches get `tie_id` and `leg` ("1", "2" or "single").
 - Country codes are UEFA associations: AS Monaco's MCO (used from 2024-25) becomes FRA.
 - Team names are mapped to one standard name per club with the reviewed table
@@ -270,19 +270,23 @@ def add_ht_inferred(df: pd.DataFrame) -> pd.DataFrame:
 def load_match_context(path: Path = REFERENCE_DIR / "match_context.csv") -> pd.DataFrame:
     """Read the reviewed venue/crowd table (one row per flagged match)."""
     context = pd.read_csv(path, parse_dates=["date"], keep_default_na=False)
-    for column in ("neutral_venue", "behind_closed_doors"):
+    for column in ("neutral_venue", "played_abroad", "behind_closed_doors"):
         context[column] = context[column].astype(str).str.lower().eq("true")
     return context
 
 
 def add_match_context(df: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
-    """Add `neutral_venue`, `neutral_reason` and `behind_closed_doors` from the reference table.
+    """Add venue and crowd flags from the reference table.
 
-    Matches not in the table get False / "". Raises if a reference row does not match
-    exactly one match, so a typo in the table can never silently drop a flag.
+    Columns: `neutral_venue` (truly neutral: finals, Lisbon Final 8), `neutral_reason`,
+    `played_abroad` (the home side relocated to another country) and
+    `behind_closed_doors`. Matches not in the table get False / "". Raises if a
+    reference row does not match exactly one match, so a typo in the table can never
+    silently drop a flag. Uses the source team names, so run it before
+    normalise_team_names.
     """
     key = ["season", "date", "home_team", "away_team"]
-    columns = ["neutral_venue", "neutral_reason", "behind_closed_doors"]
+    columns = ["neutral_venue", "neutral_reason", "played_abroad", "behind_closed_doors"]
     if context.duplicated(subset=key).any():
         raise ValueError(f"Duplicate rows in match context: {context[context.duplicated(subset=key)][key].values.tolist()}")
     merged = df.merge(context[key + columns], on=key, how="left", indicator=True, validate="one_to_one")
@@ -290,8 +294,8 @@ def add_match_context(df: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
     unmatched = unmatched[unmatched["_merge"] == "left_only"]
     if not unmatched.empty:
         raise ValueError(f"Match context rows match no match: {unmatched[key].values.tolist()}")
-    merged["neutral_venue"] = merged["neutral_venue"].fillna(False).astype(bool)
-    merged["behind_closed_doors"] = merged["behind_closed_doors"].fillna(False).astype(bool)
+    for column in ("neutral_venue", "played_abroad", "behind_closed_doors"):
+        merged[column] = merged[column].fillna(False).astype(bool)
     merged["neutral_reason"] = merged["neutral_reason"].fillna("")
     return merged.drop(columns="_merge")
 
@@ -362,3 +366,77 @@ def normalise_team_names(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFr
         out[f"{side}_team_source"] = out[f"{side}_team"]
         out[f"{side}_team"] = out[f"{side}_team"].map(mapping)
     return out
+
+
+# --- Full pipeline ---------------------------------------------------------------
+
+PROCESSED_FILE = "matches.csv"
+
+
+def clean_matches(
+    raw_dir: Path = OPENFOOTBALL_RAW_DIR,
+    reference_dir: Path = REFERENCE_DIR,
+    out_dir: Path | None = None,
+) -> pd.DataFrame:
+    """Run every cleaning step, validate the result, and optionally save it.
+
+    Order matters: match context and ties are attached using the source team names,
+    and names are standardised last.
+
+    Args:
+        out_dir: If given, the table is written to out_dir / "matches.csv".
+
+    Returns:
+        The validated match table, sorted chronologically.
+    """
+    from src.data.validate import validate_matches, validate_team_table  # avoids a cycle
+
+    team_table = pd.read_csv(reference_dir / "team_names.csv", dtype=str, keep_default_na=False)
+    validate_team_table(team_table)
+
+    df = load_openfootball(raw_dir)
+    df = normalise_country_codes(df)
+    df = add_kickoff_utc(df)
+    df = add_ht_inferred(df)
+    df = add_match_context(df, load_match_context(reference_dir / "match_context.csv"))
+    df = add_ties(df)
+    df = normalise_team_names(df, load_team_names(reference_dir / "team_names.csv"))
+    df = validate_matches(df)
+
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(out_dir / PROCESSED_FILE, index=False, encoding="utf-8")
+    return df
+
+
+def load_clean_matches(path: Path) -> pd.DataFrame:
+    """Read a saved clean match table back with its original column types.
+
+    CSV stores only text, so dates, nullable integers, booleans and empty strings are
+    restored here; later milestones should load the table with this function.
+    """
+    text_columns = ["season", "kickoff_cet", "stage", "stage_raw", "home_team", "home_country",
+                    "away_team", "away_country", "source_file", "neutral_reason",
+                    "home_team_source", "away_team_source"]
+    df = pd.read_csv(path, dtype={c: str for c in text_columns}, keep_default_na=False,
+                     na_values={c: [""] for c in ("tie_id", "leg")})
+    df["date"] = pd.to_datetime(df["date"])
+    df["kickoff_utc"] = pd.to_datetime(df["kickoff_utc"], utc=True)
+    score_cols = [c for c in COLUMNS if c.split("_")[-1] in SCORE_KINDS]
+    df[score_cols] = df[score_cols].replace("", pd.NA).astype("Float64").astype("Int64")
+    for column in ("ht_inferred", "neutral_venue", "played_abroad", "behind_closed_doors"):
+        df[column] = df[column].astype(str).eq("True")
+    for column in ("tie_id", "leg"):
+        df[column] = df[column].astype("string")
+    return df
+
+
+if __name__ == "__main__":
+    from src.config import PROCESSED_DATA_DIR
+    from src.data.validate import validate_matches
+
+    table = clean_matches(out_dir=PROCESSED_DATA_DIR)
+    validate_matches(load_clean_matches(PROCESSED_DATA_DIR / PROCESSED_FILE))  # round trip
+    clubs = pd.unique(table[["home_team", "away_team"]].values.ravel())
+    print(f"Saved {PROCESSED_DATA_DIR / PROCESSED_FILE}: {len(table)} matches, "
+          f"{len(clubs)} clubs, {table.shape[1]} columns")

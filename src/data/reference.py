@@ -12,14 +12,16 @@ model pipeline never depends on the git-ignored Wikipedia pages.
 - team_names.csv: every team name in openfootball and football-data.org -> one
   standard name. Clubs are identified by the Wikipedia article they link to (found
   by matching on date and countries, or by fixture schedule), never by string
-  similarity, and the standard name is that article's most recent display name.
-- match_context.csv: matches at a neutral venue and/or behind closed doors, each with
-  the reason and the evidence it comes from (a documented rule or source data).
+  similarity. The standard name is derived from the article title by
+  standard_name_from_title (rule documented there and in docs/data_notes.md).
+- match_context.csv: matches at a truly neutral venue, played abroad, and/or behind
+  closed doors, each with the evidence it comes from (a documented rule or source data).
 
 Run from the project root:  python -m src.data.reference
 """
 
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -27,12 +29,53 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from src.config import FOOTBALL_DATA_RAW_DIR, REFERENCE_DIR, WIKIPEDIA_RAW_DIR
-from src.data.clean import load_openfootball
+from src.data.clean import ASSOCIATION_CODES, load_openfootball
 from src.data.collect import collect_wikipedia_title_resolution
 from src.data.wikipedia import load_wikipedia_matches, match_to_openfootball
 
 TITLE_RESOLUTION_FILE = WIKIPEDIA_RAW_DIR / "title_resolution.json"
 CET = ZoneInfo("Europe/Paris")  # UEFA lists kickoffs in Central European (Summer) Time
+
+# Club-type / legal-form abbreviations removed from the start or end of an article
+# title. Tokens that are part of a club's name are deliberately absent (e.g. RB, PSV,
+# VfB, VfL, TSG, CFR, LASK), and so is "TC": "Ferencvárosi TC" without it would leave an
+# adjective ("of Ferencváros"), not a name.
+LEGAL_FORM_TOKENS = [
+    "1. FC", "F.C.", "FC", "A.F.C.", "AFC", "C.F.", "CF", "S.C.", "SC", "S.K.", "SK", "ŠK",
+    "F.K.", "FK", "NK", "GNK", "PFC", "BSC", "KRC", "KAA", "RSC", "RC", "AC", "AS", "ASC",
+    "SS", "SSC", "S.L.", "J.K.", "BC", "KV", "OSC", "HSC", "FF",
+]
+
+# Countries (UEFA associations) for 2026-27 clubs with no openfootball history,
+# entered by hand and reviewed (2026-10-25).
+NEW_CLUB_COUNTRIES = {
+    "Como": "ITA", "Fenerbahçe": "TUR", "LASK": "AUT",
+    "Real Betis": "ESP", "Sabah": "AZE", "Viking": "NOR",
+}
+
+
+def standard_name_from_title(title: str) -> str:
+    """Derive a club's standard name from its Wikipedia article title.
+
+    Rule, repeated until nothing changes:
+      1. drop a trailing disambiguator in parentheses: "Galatasaray S.K. (football)";
+      2. drop a trailing founding year (1800-2099): "Bologna FC 1909" -> "Bologna FC";
+      3. drop a LEGAL_FORM_TOKENS entry at the start and/or end, as a whole word:
+         "FC Bayern Munich" -> "Bayern Munich", "Arsenal F.C." -> "Arsenal".
+    Everything else in the title is kept as it is (spelling, accents, word order).
+    """
+    name = re.sub(r"\s*\([^)]*\)$", "", title).strip()
+    tokens = sorted(LEGAL_FORM_TOKENS, key=len, reverse=True)  # "1. FC" before "FC"
+    while True:
+        before = name
+        name = re.sub(r"\s+(18|19|20)\d{2}$", "", name)
+        for token in tokens:
+            if name.startswith(token + " "):
+                name = name[len(token) + 1:]
+            if name.endswith(" " + token):
+                name = name[: -len(token) - 1]
+        if name == before:
+            return name
 
 
 # --- Team names ---------------------------------------------------------------
@@ -106,28 +149,24 @@ def build_team_names(
     """Propose the team-name table for both sources (see module docstring).
 
     Returns columns: source, source_id, source_name, country, standard_name,
-    wikipedia_article, evidence.
+    wikipedia_article, evidence. Countries are UEFA association codes.
     """
     apps = team_appearances(matched).dropna(subset=["article"])
     apps["article"] = apps["article"].map(lambda t: resolve.get(t, t))
-
-    # Standard name = the article's most recent display name (any season, incl. 2026-27).
-    linked = pd.concat([
-        wiki[["date", "team1_article", "team1"]].set_axis(["date", "article", "display"], axis=1),
-        wiki[["date", "team2_article", "team2"]].set_axis(["date", "article", "display"], axis=1),
-    ]).dropna(subset=["article"])
-    linked["article"] = linked["article"].map(lambda t: resolve.get(t, t))
-    standard = linked.sort_values("date").groupby("article")["display"].last()
+    apps["country"] = apps["country"].replace(ASSOCIATION_CODES)
 
     rows = []
     for (name, country), group in apps.groupby(["name", "country"]):
         counts = group["article"].value_counts()
         rows.append({
             "source": "openfootball", "source_id": "", "source_name": name, "country": country,
-            "standard_name": standard[counts.index[0]], "wikipedia_article": counts.index[0],
+            "standard_name": standard_name_from_title(counts.index[0]),
+            "wikipedia_article": counts.index[0],
             "evidence": f"date+country match: {counts.iloc[0]}/{len(group)} matches"
             + ("" if len(counts) == 1 else f"; CONFLICT {dict(counts)}"),
         })
+
+    club_country = {row["standard_name"]: row["country"] for row in rows}
 
     season_2627 = wiki[(wiki["season"] == "2026-27") & (wiki["page"] == "league_phase")]
     accepted = match_fixture_teams(fixtures, season_2627)
@@ -135,11 +174,16 @@ def build_team_names(
     for team_id, name in sorted(names.items(), key=lambda x: x[1]):
         article, score = accepted.get(team_id, (None, 0.0))
         article = resolve.get(article, article)
+        standard = standard_name_from_title(article) if article else ""
+        evidence = f"fixture schedule match: similarity {score}" if article else "NO SCHEDULE MATCH"
+        country = club_country.get(standard, "")
+        if not country and standard in NEW_CLUB_COUNTRIES:
+            country = NEW_CLUB_COUNTRIES[standard]
+            evidence += "; no history, country entered by hand"
         rows.append({
             "source": "football-data.org", "source_id": str(team_id), "source_name": name,
-            "country": "", "standard_name": standard.get(article, "") if article else "",
-            "wikipedia_article": article or "",
-            "evidence": f"fixture schedule match: similarity {score}" if article else "NO SCHEDULE MATCH",
+            "country": country, "standard_name": standard, "wikipedia_article": article or "",
+            "evidence": evidence,
         })
     return pd.DataFrame(rows)
 
@@ -148,21 +192,21 @@ def build_team_names(
 
 
 def build_match_context(matched: pd.DataFrame) -> pd.DataFrame:
-    """Flag neutral venues and behind-closed-doors matches, with reason and evidence.
+    """Flag venue and crowd context, each flag with its evidence.
 
-    Neutral venue (one reason per match, first that applies):
-      - "final": every final is at a venue chosen in advance (rule).
-      - "lisbon_final_8": 2019-20 quarter- and semi-finals, single matches in Lisbon (rule).
-      - "played_abroad": Wikipedia's stadium field names a country, which it does only
-        when the "home" side played outside its own country (source data).
-    Behind closed doors: Wikipedia attendance is 0 (source data).
+    - neutral_venue (truly neutral: neither side at home), with neutral_reason:
+        "final": every final is at a venue chosen in advance (rule);
+        "lisbon_final_8": 2019-20 quarter- and semi-finals, single matches in Lisbon (rule).
+    - played_abroad: the listed home side played outside its own country. Evidence:
+      Wikipedia's stadium field names a country, which it does only in that case.
+    - behind_closed_doors: Wikipedia attendance is 0 (source data).
     """
     m = matched.copy()
     stadium = m["wp_stadium"].fillna("")
     m["neutral_reason"] = None
-    m.loc[stadium.str.count(",") >= 2, "neutral_reason"] = "played_abroad"
     m.loc[(m["season"] == "2019-20") & m["stage"].isin(["quarterfinal", "semifinal"]), "neutral_reason"] = "lisbon_final_8"
     m.loc[m["stage"] == "final", "neutral_reason"] = "final"
+    m["played_abroad"] = stadium.str.count(",") >= 2
     m["behind_closed_doors"] = m["wp_attendance"] == 0
 
     # A "neutral" final at one finalist's own usual stadium is worth knowing about.
@@ -173,10 +217,7 @@ def build_match_context(matched: pd.DataFrame) -> pd.DataFrame:
             if usual.get(team) == row["wp_stadium"]:
                 m.loc[idx, "note"] = f"played at {team}'s usual home stadium"
 
-    flagged = m[m["neutral_reason"].notna() | m["behind_closed_doors"]]
-    evidence = flagged["neutral_reason"].map({
-        "final": "rule", "lisbon_final_8": "rule", "played_abroad": "Wikipedia stadium field",
-    })
+    flagged = m[m["neutral_reason"].notna() | m["played_abroad"] | m["behind_closed_doors"]]
     return pd.DataFrame({
         "season": flagged["season"],
         "date": flagged["date"].dt.date,
@@ -184,7 +225,9 @@ def build_match_context(matched: pd.DataFrame) -> pd.DataFrame:
         "away_team": flagged["away_team"],
         "neutral_venue": flagged["neutral_reason"].notna(),
         "neutral_reason": flagged["neutral_reason"].fillna(""),
-        "neutral_evidence": evidence.fillna(""),
+        "neutral_evidence": flagged["neutral_reason"].notna().map({True: "rule", False: ""}),
+        "played_abroad": flagged["played_abroad"],
+        "abroad_evidence": flagged["played_abroad"].map({True: "Wikipedia stadium field", False: ""}),
         "behind_closed_doors": flagged["behind_closed_doors"],
         "bcd_evidence": flagged["behind_closed_doors"].map({True: "Wikipedia attendance = 0", False: ""}),
         "stadium": flagged["wp_stadium"],

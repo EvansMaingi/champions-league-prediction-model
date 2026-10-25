@@ -7,17 +7,31 @@ Next stage: build_features.py builds features from a table that passed validatio
 
 Validation fails loudly rather than silently fixing problems: each check raises a
 ValueError that names the offending rows, and returns nothing when all is well.
-
-TODO (planned functions):
-- check_required_columns(df: pd.DataFrame, required: list[str]) -> None
-    Raise ValueError naming any missing column.
-- check_no_duplicate_matches(df: pd.DataFrame) -> None
-    Raise if the same (date, home_team, away_team) appears more than once.
-- validate_matches(df: pd.DataFrame) -> pd.DataFrame
-    Run every check and return df unchanged if all pass.
+validate_matches runs every match-table check; validate_team_table checks the
+reviewed team-name table.
 """
 
 import pandas as pd
+
+REQUIRED_COLUMNS = [
+    "season", "date", "kickoff_cet", "kickoff_utc", "stage", "home_team", "away_team",
+    "home_country", "away_country", "home_ft", "away_ft", "home_ht", "away_ht",
+    "ht_inferred", "neutral_venue", "played_abroad", "behind_closed_doors", "tie_id", "leg",
+]
+
+
+def check_required_columns(df: pd.DataFrame, required: list[str] = REQUIRED_COLUMNS) -> None:
+    """Raise ValueError naming any missing column."""
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {missing}")
+
+
+def check_no_duplicate_matches(df: pd.DataFrame) -> None:
+    """Raise if the same (date, home_team, away_team) appears more than once."""
+    duplicated = df.duplicated(subset=["date", "home_team", "away_team"], keep=False)
+    if duplicated.any():
+        raise ValueError(f"Duplicate matches: rows {df.index[duplicated].tolist()}")
 
 
 def check_teams_mapped(df: pd.DataFrame, mapping: dict[str, str]) -> None:
@@ -32,6 +46,26 @@ def check_teams_mapped(df: pd.DataFrame, mapping: dict[str, str]) -> None:
         raise ValueError(
             f"{len(unmapped)} team name(s) missing from data/reference/team_names.csv: {unmapped}"
         )
+
+
+def validate_team_table(table: pd.DataFrame) -> None:
+    """Raise if the team-name table is incomplete or ambiguous.
+
+    Every row needs a standard name and a country; each club (standard name) has
+    exactly one country and one Wikipedia article, and each article one standard name.
+    """
+    problems = []
+    for column in ("standard_name", "country"):
+        empty = table[table[column].fillna("").str.strip() == ""]
+        if not empty.empty:
+            problems.append(f"rows without {column}: {empty['source_name'].tolist()}")
+    for column, other in (("standard_name", "country"), ("standard_name", "wikipedia_article"),
+                          ("wikipedia_article", "standard_name")):
+        counts = table[table[column] != ""].groupby(column)[other].nunique()
+        if (counts > 1).any():
+            problems.append(f"{column} with more than one {other}: {counts[counts > 1].index.tolist()}")
+    if problems:
+        raise ValueError("; ".join(problems))
 
 
 def check_scores_consistent(df: pd.DataFrame) -> None:
@@ -81,3 +115,19 @@ def check_shootouts(df: pd.DataFrame) -> None:
             problems.append(f"row {index} ({row['tie_id']}, leg {row['leg']})")
     if problems:
         raise ValueError(f"Penalty shootout after a tie that was not level: {problems}")
+
+
+def check_chronological(df: pd.DataFrame) -> None:
+    """Raise if the table is not sorted by date (later stages rely on time order)."""
+    if not df["date"].is_monotonic_increasing:
+        raise ValueError("Match table is not sorted chronologically by date")
+
+
+def validate_matches(df: pd.DataFrame) -> pd.DataFrame:
+    """Run every match-table check; return df unchanged if all pass."""
+    check_required_columns(df)
+    check_no_duplicate_matches(df)
+    check_chronological(df)
+    check_scores_consistent(df)
+    check_shootouts(df)
+    return df
