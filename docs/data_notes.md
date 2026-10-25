@@ -214,8 +214,18 @@ Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
   2011-12, Elo expected 0.473 points-share per match but they scored 0.360 (established
   clubs: expected 0.505, actual 0.524). Starting at the pool average flatters small clubs.
 - Both findings were measured on all seasons, so they are **not** used to change the
-  parameters now. Possible fixes (higher K, a lower start for newcomers) are for
-  Milestone 7, chosen on training and validation seasons only.
+  parameters now.
+- **Known limitation: scale drift.** Because the spread is compressed until about 2015-16,
+  the same `elo_diff` corresponds to a slightly larger real strength gap in the early
+  training seasons than later. Models will see this as mild drift in the feature.
+- **Milestone 7 tuning plan (agreed 2026-10-25).** Small grid: K in {15, 20, 30} x newcomer
+  start in {1500, empirical}. The tuning score is computed on **validation seasons only**;
+  the test seasons are never used.
+- **Newcomers, two options to compare in Milestone 7:**
+  1. keep 1500 and check whether the model learns the correction from `*_elo_n = 0` and
+     `*_has_history = False`;
+  2. if it does not, an empirical newcomer start: the average rating newcomers end their
+     first season at, measured on **training seasons only**.
 - External ratings (e.g. ClubElo, which also uses domestic matches) are an option, not
   used until their licence and the timing of their dates (a rating published after a
   match must never be used for it) have been checked.
