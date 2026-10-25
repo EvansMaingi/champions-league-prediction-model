@@ -22,10 +22,12 @@ Note: scikit-learn sorts class labels alphabetically, so model.classes_ will be
 Leakage guard
 -------------
 Every column has a role in COLUMN_ROLES: "pre_match" (may become a feature),
+"derived_pre_match" (a feature built in this module, registered in DERIVED_PRE_MATCH),
 "post_match" (known only after the final whistle; never a feature for that match) or
 "identifier" (keys for sorting, joining and tracing; not features).
-assert_valid_features(features, allowed) fails if a feature is post-match, or is not on
-the explicit allowlist that Milestone 5 will declare.
+assert_valid_features(features, allowed) is the gate for model inputs: a feature must be
+on the allowlist that Milestone 5 will declare AND have an explicit pre-match role.
+A column without a role fails, so a new derived name cannot slip through unclassified.
 
 TODO (Milestone 5, leakage rules):
 - Rolling features use only EARLIER matches: sort chronologically and shift so a match
@@ -65,11 +67,18 @@ IDENTIFIERS = [
     "tie_id", "source_file", "home_team_source", "away_team_source",
 ]
 
+# Features created in this module (Milestone 5) are registered here, one entry per
+# column, next to the code that builds them. Registering a name declares that it is
+# computed only from information available before kickoff.
+DERIVED_PRE_MATCH: list[str] = []
+
 COLUMN_ROLES: dict[str, str] = {
     **{column: "pre_match" for column in PRE_MATCH},
+    **{column: "derived_pre_match" for column in DERIVED_PRE_MATCH},
     **{column: "post_match" for column in POST_MATCH + POST_MATCH_NOT_IN_TABLE},
     **{column: "identifier" for column in IDENTIFIERS},
 }
+FEATURE_ROLES = frozenset({"pre_match", "derived_pre_match"})
 FORBIDDEN_FEATURE_COLUMNS = frozenset(c for c, role in COLUMN_ROLES.items() if role == "post_match")
 
 
@@ -106,16 +115,34 @@ def assert_no_leakage(feature_columns: list[str]) -> None:
         raise ValueError(f"Post-match columns cannot be features: {leaked}")
 
 
-def assert_valid_features(feature_columns: list[str], allowed_columns: list[str]) -> None:
-    """Raise if a feature is forbidden, or is not on the explicit allowlist.
+def assert_valid_features(
+    feature_columns: list[str],
+    allowed_columns: list[str],
+    roles: dict[str, str] = COLUMN_ROLES,
+) -> None:
+    """Raise unless every feature is allowlisted AND has an explicit pre-match role.
 
-    The allowlist cannot override the forbidden list: listing a post-match column as
-    allowed is itself an error.
+    This is the gate for model inputs. It fails if a feature or allowlist entry:
+      - is post-match (the allowlist cannot override the forbidden list);
+      - has no role at all, e.g. a newly derived name such as "home_led_at_halftime"
+        that nobody has classified (unknown is treated as unsafe);
+      - has a non-feature role, e.g. an identifier such as "date";
+      - (features only) is not on the allowlist.
+
+    Args:
+        roles: Column roles; defaults to COLUMN_ROLES (tests pass their own).
     """
-    assert_no_leakage(feature_columns)
-    allowed_but_forbidden = sorted(set(allowed_columns) & FORBIDDEN_FEATURE_COLUMNS)
-    if allowed_but_forbidden:
-        raise ValueError(f"Allowlist contains post-match columns: {allowed_but_forbidden}")
+    forbidden = {c for c, role in roles.items() if role == "post_match"}
+    for label, columns in (("Features", feature_columns), ("Allowlist", allowed_columns)):
+        leaked = sorted(set(columns) & forbidden)
+        if leaked:
+            raise ValueError(f"{label} contains post-match columns: {leaked}")
+        unknown = sorted(c for c in set(columns) if c not in roles)
+        if unknown:
+            raise ValueError(f"{label} contains columns without a role in COLUMN_ROLES: {unknown}")
+        wrong_role = sorted(c for c in set(columns) if roles[c] not in FEATURE_ROLES)
+        if wrong_role:
+            raise ValueError(f"{label} contains columns that are not pre-match features: {wrong_role}")
     not_allowed = sorted(set(feature_columns) - set(allowed_columns))
     if not_allowed:
         raise ValueError(f"Features not on the allowlist: {not_allowed}")

@@ -77,7 +77,7 @@ def test_every_pipeline_column_has_a_role(tmp_path):
 
 
 def test_roles_do_not_overlap():
-    groups = [bf.PRE_MATCH, bf.POST_MATCH + bf.POST_MATCH_NOT_IN_TABLE, bf.IDENTIFIERS]
+    groups = [bf.PRE_MATCH, bf.DERIVED_PRE_MATCH, bf.POST_MATCH + bf.POST_MATCH_NOT_IN_TABLE, bf.IDENTIFIERS]
     assert sum(len(g) for g in groups) == len(bf.COLUMN_ROLES)
 
 
@@ -103,9 +103,20 @@ def test_assert_no_leakage_rejects_target_and_scores():
     bf.assert_no_leakage(["neutral_venue", "home_form_points"])  # no error
 
 
+def roles_with_derived(*names: str) -> dict[str, str]:
+    """COLUMN_ROLES plus some registered derived pre-match features (for tests)."""
+    return {**bf.COLUMN_ROLES, **{name: "derived_pre_match" for name in names}}
+
+
 def test_assert_valid_features_accepts_allowed_pre_match_features():
+    bf.assert_valid_features(["neutral_venue", "stage"], allowed_columns=["neutral_venue", "stage", "leg"])
+
+
+def test_assert_valid_features_accepts_registered_derived_feature():
+    roles = roles_with_derived("home_form_points", "away_form_points")
     bf.assert_valid_features(["neutral_venue", "home_form_points"],
-                             allowed_columns=["neutral_venue", "home_form_points", "away_form_points"])
+                             allowed_columns=["neutral_venue", "home_form_points", "away_form_points"],
+                             roles=roles)
 
 
 def test_assert_valid_features_rejects_unlisted_feature():
@@ -114,7 +125,24 @@ def test_assert_valid_features_rejects_unlisted_feature():
 
 
 def test_assert_valid_features_rejects_forbidden_even_if_allowed():
-    with pytest.raises(ValueError, match="Post-match"):
+    with pytest.raises(ValueError, match="Features contains post-match"):
         bf.assert_valid_features(["result"], allowed_columns=["result"])
     with pytest.raises(ValueError, match="Allowlist contains post-match"):
         bf.assert_valid_features(["neutral_venue"], allowed_columns=["neutral_venue", "home_aet"])
+
+
+def test_unclassified_derived_name_fails_even_if_allowlisted():
+    """The gap from the Milestone 4 review: a new name with no role must not pass."""
+    assert "home_led_at_halftime" not in bf.COLUMN_ROLES
+    with pytest.raises(ValueError, match="without a role.*home_led_at_halftime"):
+        bf.assert_valid_features(["home_led_at_halftime"], allowed_columns=["home_led_at_halftime"])
+
+
+def test_unclassified_name_on_allowlist_alone_fails():
+    with pytest.raises(ValueError, match="Allowlist contains columns without a role"):
+        bf.assert_valid_features(["neutral_venue"], allowed_columns=["neutral_venue", "mystery_column"])
+
+
+def test_identifier_cannot_be_a_feature():
+    with pytest.raises(ValueError, match="not pre-match features: \\['date'\\]"):
+        bf.assert_valid_features(["date"], allowed_columns=["date"])
