@@ -132,11 +132,24 @@ pytest
 |---|---|---|---|
 | Historical results, 2011-12 to 2025-26 (1,997 matches) | [openfootball/champions-league](https://github.com/openfootball/champions-league) | [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain) | Yes: `data/raw/openfootball/` |
 | Current-season fixtures and results | [football-data.org](https://www.football-data.org) API, free plan | No published redistribution terms | No: fetched locally into `data/raw/football_data_org/` (git-ignored) |
-| Second source for quality checks (scores, kickoff times, venues, attendance) | English [Wikipedia](https://en.wikipedia.org) season, knockout and final articles | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | Raw pages: no. Derived stadium and attendance facts in `data/reference/match_context.csv`, with page revision IDs |
+| Second source for quality checks (scores, kickoff times) and venue/crowd context | English [Wikipedia](https://en.wikipedia.org) season, knockout and final articles | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | Raw pages: no. Derived data: yes, see below |
 
 Thanks to the openfootball project for its public-domain data. Football data provided by
-the Football-Data.org API. Venue and attendance information from Wikipedia contributors
-(CC BY-SA 4.0). Every cleaning decision and its evidence is documented in
+the Football-Data.org API.
+
+**Wikipedia-derived data (CC BY-SA 4.0).** The following are derived from English Wikipedia
+articles by Wikipedia contributors, licensed under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), with each page's revision ID
+recorded in `data/reference/match_context.csv`:
+
+- in `data/reference/match_context.csv`: the `stadium`, `attendance`, `played_abroad` and
+  `behind_closed_doors` columns;
+- in `data/processed/matches.csv`: the `played_abroad` and `behind_closed_doors` columns;
+- in `data/reference/team_names.csv`: the `wikipedia_article` column and the standard names
+  derived from it.
+
+`neutral_venue` is not from Wikipedia: it follows documented rules (finals; the 2019-20
+Lisbon "Final 8"). Every cleaning decision and its evidence is documented in
 [docs/data_notes.md](docs/data_notes.md).
 
 **Collecting the data** (from the project root, with the virtual environment active):
