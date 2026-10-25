@@ -19,3 +19,7 @@ python-dotenv
 
 # Testing
 pytest
+
+# Notebooks (run in VS Code with .venv; nbconvert executes them from the terminal)
+ipykernel
+nbconvert
