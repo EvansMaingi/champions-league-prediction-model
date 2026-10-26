@@ -265,6 +265,49 @@ Result: 1,997 matches, 108 clubs, 28 columns; original spellings kept in
   first-leg features; the largest absolute correlation of any single feature with the
   home side's points is 0.395 (`elo_diff`), so no feature mirrors the target.
 
+## Chronological split and baselines (Milestone 6)
+
+Whole seasons, set in `src/config.py` and applied by `src/training/split.py`
+(`chronological_split` raises if a season has no role, two roles, or if the sets overlap
+in time):
+
+| Set | Seasons | Matches | Dates | H / D / A |
+|---|---|---|---|---|
+| Warm-up (history only) | 2011-12 | 125 | | |
+| Train | 2012-13 to 2023-24 | 1,494 | 2012-09-18 to 2024-06-01 | 46.7 / 21.2 / 32.1% |
+| Validation | 2024-25 | 189 | 2024-09-17 to 2025-05-31 | 51.3 / 13.8 / 34.9% |
+| Test (sealed until end of M8) | 2025-26 | 189 | 2025-09-16 to 2026-05-30 | not reported |
+
+- **Why:** validation and test are both 36-team-format seasons, so model choices are judged
+  on matches like the ones we will predict. Cost: 189 validation matches is small;
+  Milestone 8 adds bootstrap intervals. **Fallback if too noisy in Milestone 7:**
+  walk-forward validation (train to season N, score N+1, over a few seasons), with 2025-26
+  still untouched.
+- **Training data cutoff:** 2024-06-01 for model selection. Milestone 9 refits on 2012-13
+  to 2025-26 to predict 2026-27 and records that cutoff.
+- **Validation baselines** (fitted on train, `python -m src.training.train`):
+
+  | Baseline | Log loss | Brier | Accuracy | mean p(D) |
+  |---|---|---|---|---|
+  | prior (training shares) | 1.0011 | 0.6042 | 0.5132 | 0.212 |
+  | uniform (1/3 each) | 1.0986 | 0.6667 | 0.5132 | 0.333 |
+  | always home | 17.5451 | 0.9735 | 0.5132 | 0.000 |
+
+  All three have the same accuracy (every argmax is H; uniform ties go to H), so accuracy
+  cannot rank them; log loss and Brier can. Always-home's log loss is the clipped cost
+  (about 36 per match) of the 92 non-home results it called impossible.
+- **Draw-rate shift (known limitation):** the training draw rate is 21.2%, validation 13.8%.
+  No feature can learn the new format's lower draw rate (`stage` maps the league phase
+  into `group_or_league`, and a format flag would be constant in training), so expect
+  draws to be over-predicted on validation and test. The prior baseline already shows it
+  (mean p(D) 0.212 vs 0.138). Milestone 8 reports per-class calibration, especially D.
+  The Milestone 9 refit, which includes two new-format seasons, partly corrects it.
+- **Column order:** scikit-learn's `log_loss` and `brier_score_loss` assume probability
+  columns are in sorted label order (A, D, H) and do not reorder them to match `labels`.
+  `evaluate.predict_proba_frame` names columns by `model.classes_` and returns H, D, A;
+  `evaluate_probabilities` sorts them before calling scikit-learn. A test pins this
+  (the wrong order gave 1.7533 instead of 0.8574 on the hand example).
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's

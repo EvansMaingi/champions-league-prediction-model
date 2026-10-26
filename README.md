@@ -189,7 +189,13 @@ _To be completed (Milestone 8). No results are reported until they come from run
 
 ## Known Limitations
 
-_To be completed._
+_More to be added as milestones finish._
+
+- **Draw-rate shift in the 36-team format:** draws fell from 21.2% of matches in the
+  training seasons (2012-13 to 2023-24) to 13.8% in 2024-25. No feature tells the model
+  which format a match belongs to, so it is expected to over-predict draws on new-format
+  matches. Per-class calibration is reported in Milestone 8; the final model is refitted
+  on seasons that include the new format, which partly corrects this.
 
 ## Future Improvements
 

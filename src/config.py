@@ -27,6 +27,16 @@ RANDOM_SEED: int = 42
 # Number of previous matches used for rolling "form" features.
 FORM_WINDOW: int = 5
 
+# --- Chronological split (Milestone 6) ---------------------------------------
+# Whole seasons, oldest -> newest. Every season in the feature table must appear in
+# exactly one list. 2011-12 only builds history (form, Elo): its first matches are
+# artificial cold starts. Validation and test are both 36-team-format seasons; the test
+# season is scored once, at the end of Milestone 8.
+WARMUP_SEASONS: list[str] = ["2011-12"]
+TRAIN_SEASONS: list[str] = [f"{y}-{str(y + 1)[-2:]}" for y in range(2012, 2024)]  # 2012-13 to 2023-24
+VALIDATION_SEASONS: list[str] = ["2024-25"]
+TEST_SEASONS: list[str] = ["2025-26"]
+
 # --- Data sources ------------------------------------------------------------
 # Historical results: openfootball/champions-league (CC0-1.0 public domain).
 OPENFOOTBALL_BASE_URL: str = (

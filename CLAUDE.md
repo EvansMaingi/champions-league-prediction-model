@@ -28,6 +28,12 @@ commit, and push.
 ## Decisions carried forward (details and evidence: docs/data_notes.md)
 - Milestone 6: 2011-12 is a warm-up season. Use it to build history (form, Elo) but
   exclude it from training and evaluation (its first matches are artificial cold starts).
+- Milestone 6 split (src/config.py): train 2012-13 to 2023-24 (1,494), validation 2024-25
+  (189), test 2025-26 (189). The test set stays sealed until the end of Milestone 8.
+- Milestone 7: if 189 validation matches is too noisy, fall back to walk-forward
+  validation (train to season N, score N+1), never touching 2025-26.
+- Milestone 8: report per-class calibration, especially D (draw-rate shift: 21.2% in
+  training vs 13.8% in validation; no feature can learn it).
 - Milestone 7: impute missing form values inside the Pipeline (fitted on training data
   only) and keep the *_has_history flags; HistGradientBoosting can take NaN directly.
 - Milestone 9: football-data.org has no venue field, so played_abroad / neutral_venue for
