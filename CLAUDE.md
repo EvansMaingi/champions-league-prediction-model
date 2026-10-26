@@ -7,13 +7,13 @@ machine learning by building it. Understanding matters more than speed.
 Full specification: docs/PROJECT_SPEC.md (read it when starting a new milestone).
 
 ## Current progress
-Current milestone: 5 — Feature engineering
+Current milestone: 6 — Chronological train/validation/test split + baseline
 
 - [x] 1. Environment setup, scaffolding, GitHub repo
 - [x] 2. Data collection (verify sources, licensing, collect.py)
 - [x] 3. Exploratory data analysis (starts with parsing raw files into a match table in clean.py)
 - [x] 4. Target definition (result: H / D / A)
-- [ ] 5. Feature engineering (leakage-safe rolling features)
+- [x] 5. Feature engineering (leakage-safe rolling features)
 - [ ] 6. Chronological train/validation/test split + baseline
 - [ ] 7. Model training (Dummy, Logistic Regression, Random Forest, Gradient Boosting)
 - [ ] 8. Evaluation + probability calibration
