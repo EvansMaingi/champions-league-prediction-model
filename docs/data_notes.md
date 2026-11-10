@@ -403,6 +403,85 @@ All scores are walk-forward over the 6 folds (808 held-out matches); 2025-26 is 
    and must still pass (a) or (b) against the grid winner.
 6. **Counting:** every configuration scored on validation data counts once.
 
+### Part C: results (`python -m src.training.experiments`, run at commit 5edd561)
+
+**Flag rule (applies to every model):** the 6 boolean features (`*_has_history`,
+`neutral_venue`, `played_abroad`, `behind_closed_doors`, `away_goals_rule`) pass through as
+0/1; only continuous features are standardised. Effect on LR C = 1.0, walk-forward pooled
+log loss: 1.0035 (scaled flags, Part B) -> 0.9553 (unscaled). Trees are unaffected.
+
+**Stage 1, model grid (14 configurations, default features and Elo):**
+
+| Config | Pooled log loss | 2024-25 | Train | share > 0.9 | Status |
+|---|---|---|---|---|---|
+| lr_C0.1 | 0.9303 | 0.9234 | 0.9153 | 1.6% | **grid winner** |
+| rf_leaf20 | 0.9335 | 0.9203 | 0.8695 | 0.0% | runner-up (other family) |
+| rf_leaf5 | 0.9366 | 0.9338 | 0.6699 | 0.2% | |
+| lr_C0.3 | 0.9393 | 0.9261 | 0.9124 | 2.1% | excluded |
+| hgb_d2_lr0.03_it100 | 0.9402 | 0.9204 | 0.8802 | 0.0% | best HGB |
+| rf_leaf50 | 0.9402 | 0.9187 | 0.9247 | 0.0% | |
+| hgb_d3_lr0.03_it100 | 0.9460 | 0.9311 | 0.8298 | 0.9% | |
+| hgb_d2_lr0.05_it100 | 0.9475 | 0.9366 | 0.8489 | 1.0% | |
+| lr_C1.0 | 0.9553 | 0.9278 | 0.9109 | 2.0% | |
+| hgb_d3_lr0.05_it100 | 0.9584 | 0.9558 | 0.7807 | 2.2% | excluded |
+| hgb_d2_lr0.03_it300 | 0.9673 | 0.9692 | 0.8005 | 2.1% | excluded |
+| hgb_d3_lr0.03_it300 | 0.9883 | 0.9935 | 0.7036 | 4.1% | excluded |
+| hgb_d2_lr0.05_it300 | 0.9896 | 0.9982 | 0.7420 | 4.3% | excluded |
+| hgb_d3_lr0.05_it300 | 1.0270 | 1.0383 | 0.6144 | 6.6% | excluded |
+| prior | 1.0407 | 1.0011 | 1.0491 | 0.0% | baseline |
+
+- lr_C0.1 minus rf_leaf20: -0.0032 [-0.0202, +0.0139]. A tie; LR is also the simpler
+  family, so LR wins either way. Beats the prior on 2024-25 (0.9234 vs 1.0011).
+- (`lr_C1.0` shows 1.98% over 0.9, just under the 2% limit, so it is not excluded.)
+- More regularisation helped every family (smaller C, larger leaves, fewer/smaller
+  boosting steps): with ~1,000-1,500 training matches, the main risk is overfitting.
+- Were the confident predictions right? Walk-forward predictions above 0.9: lr_C0.3 17
+  (mean 0.916, came true 82.4%: overconfident, exclusion justified); lr_C0.1 13 (0.917,
+  92.3%); final model 11 (0.910, 100%).
+
+**Stage 2, experiments on lr_C0.1** (difference = variant minus current, 95% paired bootstrap):
+
+| Experiment | Variant | Pooled | 2024-25 | Difference | Qualifies |
+|---|---|---|---|---|---|
+| Elo | K 15, start 1500 | 0.9308 | 0.9237 | +0.0005 [-0.0002, +0.0012] | no |
+| | K 15, empirical | 0.9301 | 0.9193 | -0.0002 [-0.0020, +0.0016] | no |
+| | K 20, empirical | 0.9296 | 0.9195 | -0.0007 [-0.0025, +0.0011] | no |
+| | K 30, start 1500 | 0.9296 | 0.9232 | -0.0007 [-0.0020, +0.0005] | no |
+| | K 30, empirical | 0.9290 | 0.9195 | -0.0013 [-0.0036, +0.0010] | no |
+| Features | form only | 0.9616 | 0.9364 | +0.0313 [+0.0077, +0.0551] | no (worse) |
+| | Elo only | 0.9323 | 0.9499 | +0.0020 [-0.0125, +0.0173] | yes (b) |
+| | form + Elo | **0.9272** | 0.9355 | -0.0031 [-0.0132, +0.0076] | **yes (b), adopted** |
+| | all except `behind_closed_doors` | 0.9293 | 0.9239 | -0.0010 [-0.0031, +0.0011] | yes (b) |
+| Team identity | one-hot home/away team | 0.9366 | 0.9317 | +0.0063 [-0.0024, +0.0147] | no (excluded: >2% over 0.9) |
+| Recency | half-life 3 seasons | 0.9384 | 0.9383 | +0.0081 [+0.0021, +0.0140] | no (worse) |
+| | half-life 6 seasons | 0.9336 | 0.9302 | +0.0033 [+0.0001, +0.0065] | no (worse) |
+
+- **Elo:** no setting changes the score by more than 0.0013. The empirical newcomer start,
+  measured per fold on training seasons only, is 1479-1490 (K 30 to 15), only 10-20
+  points below 1500: a newcomer plays about 6 matches in its first season, so one season
+  of updates cannot move it far. Fixed in advance and simpler, K 20 / 1500 stays.
+- **Features:** context adds nothing measurable pooled, so the simpler form + Elo set is
+  adopted (rule 5b). **Caution:** on the 2024-25 fold it is worse (0.9355 vs 0.9234 with
+  context). The rule allowed it because 2024-25 is only a sanity check against the prior.
+- **Team identity:** 186 of 808 held-out matches (23%) involve a club the fold never
+  trained on (an all-zero one-hot row). Identity was worse on both known-team matches
+  (0.9453 vs 0.9388) and unknown-team matches (0.9075 vs 0.9018), and too confident.
+- **Recency weighting:** worse, as expected: weighting recent old-format seasons cannot
+  teach the new format's draw rate, and it throws away data.
+- Only one experiment changed the setting, so no combination run was needed.
+
+**Final:** logistic regression, C = 0.1, 17 features (12 form + 5 Elo), default Elo
+(K 20, start 1500), no identity, no weighting. Pooled log loss 0.9272 (prior 1.0407),
+Brier 0.5447, accuracy 0.589, mean p(D) 0.191, train 0.9305; 2024-25 fold 0.9355
+(prior 1.0011); minus prior -0.1136 [-0.1478, -0.0784]. Saved as `models/model_m7.joblib`
+(git-ignored) and `models/model_m7.json`: fitted on all 1,683 train + validation matches
+(2012-13 to 2024-25), **training data cutoff 2025-05-31**, the same protocol as a 7th
+walk-forward fold for the test season.
+
+**Comparisons on validation data: 29** = 3 (parts A-B) + 14 (grid) + 12 (5 Elo, 4 feature
+sets, 1 identity, 2 recency). With 29 looks at the same 808 matches, the winner's
+validation score is optimistic; the sealed 2025-26 season gives the unbiased estimate.
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's

@@ -36,6 +36,15 @@ commit, and push.
   training vs 13.8% in validation; no feature can learn it).
 - Milestone 7: impute missing form values inside the Pipeline (fitted on training data
   only) and keep the *_has_history flags; HistGradientBoosting can take NaN directly.
+- Milestone 7 (selection rule fixed before results, docs/data_notes.md): walk-forward
+  validation over 2019-20 to 2024-25; 0/1 flags are never scaled. Selected: logistic
+  regression C = 0.1 on 17 form + Elo features (no context features), default Elo
+  (K 20, start 1500). Saved to models/model_m7.joblib + .json, fitted on 2012-13 to
+  2024-25 (cutoff 2025-05-31). 29 validation comparisons.
+- Milestone 8: score models/model_m7 once on 2025-26 (the 7th walk-forward fold). Watch the
+  new format: dropping context features made the 2024-25 fold worse (0.9355 vs 0.9234).
+- Milestone 9: the selected model needs no venue/stage inputs, but predict.py must compute
+  Elo with the saved metadata's parameters and flag clubs with no history.
 - Milestone 9: football-data.org has no venue field, so played_abroad / neutral_venue for
   upcoming fixtures (e.g. Shakhtar's relocated home matches) need a verified source.
 

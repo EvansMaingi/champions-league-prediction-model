@@ -177,7 +177,24 @@ Raw files are saved unchanged, and each download is recorded in the folder's
 
 ## Training the Model
 
-_To be completed (Milestones 6–8)._
+With the virtual environment active, from the project root:
+
+```powershell
+python -m src.training.train         # baselines + untuned LR / RF / HGB, walk-forward
+python -m src.training.experiments   # grids, experiments, selection rule, saves the model (~3 min)
+```
+
+- **Validation:** walk-forward over 2019-20 to 2024-25. Each season is predicted by a model
+  trained only on earlier seasons (808 held-out matches). The 2025-26 test season is
+  removed before any feature is built and is scored once, in Milestone 8.
+- **Selection:** a rule fixed before the experiments ran (`docs/data_notes.md`): lowest
+  pooled log loss, no overconfident models (more than 2% of matches above 90%), and the
+  simpler option when two cannot be told apart.
+- **Selected model (Milestone 7):** logistic regression (C = 0.1) on 17 form and Elo
+  features. Walk-forward log loss 0.9272 vs 1.0407 for the base-rate baseline.
+  29 configurations were compared on validation data.
+- **Output:** `models/model_m7.joblib` (fitted pipeline, git-ignored) and
+  `models/model_m7.json` (features, parameters, training cutoff 2025-05-31, validation scores).
 
 ## Running the App
 
@@ -196,6 +213,10 @@ _More to be added as milestones finish._
   which format a match belongs to, so it is expected to over-predict draws on new-format
   matches. Per-class calibration is reported in Milestone 8; the final model is refitted
   on seasons that include the new format, which partly corrects this.
+- **Small validation sample:** 808 held-out matches cannot separate models whose log loss
+  differs by less than about 0.02; several of the 29 configurations are statistically tied.
+- **Clubs new to the competition:** 23% of held-out matches involve a club the model never
+  saw in training; it relies on default Elo (1500) and missing-form flags for them.
 
 ## Future Improvements
 

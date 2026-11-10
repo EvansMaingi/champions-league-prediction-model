@@ -1,0 +1,130 @@
+{
+  "name": "model_m7",
+  "created_utc": "2026-11-10T19:12:45+00:00",
+  "model": "lr_C0.1",
+  "family": "lr",
+  "hyperparameters": {
+    "C": 0.1
+  },
+  "estimator": "LogisticRegression(C=0.1, max_iter=1000)",
+  "features": [
+    "home_form_points",
+    "home_form_goals_for",
+    "home_form_goals_against",
+    "home_form_n",
+    "home_form_n_season",
+    "home_has_history",
+    "away_form_points",
+    "away_form_goals_for",
+    "away_form_goals_against",
+    "away_form_n",
+    "away_form_n_season",
+    "away_has_history",
+    "home_elo",
+    "away_elo",
+    "elo_diff",
+    "home_elo_n",
+    "away_elo_n"
+  ],
+  "flags_unscaled": true,
+  "stage_groups": {
+    "group": "group_or_league",
+    "league": "group_or_league",
+    "playoff": "round_of_16_or_playoff",
+    "round_of_16": "round_of_16_or_playoff",
+    "quarterfinal": "quarterfinal",
+    "semifinal": "semifinal",
+    "final": "final"
+  },
+  "elo": {
+    "k": 20.0,
+    "home_advantage": 60.0,
+    "season_regression": 0.3333333333333333,
+    "start": 1500.0,
+    "newcomer_start": 1500.0,
+    "newcomer_rule": "1500"
+  },
+  "recency_half_life": null,
+  "training_seasons": [
+    "2012-13",
+    "2013-14",
+    "2014-15",
+    "2015-16",
+    "2016-17",
+    "2017-18",
+    "2018-19",
+    "2019-20",
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24",
+    "2024-25"
+  ],
+  "training_matches": 1683,
+  "training_data_cutoff": "2025-05-31",
+  "test_seasons_sealed": [
+    "2025-26"
+  ],
+  "classes": [
+    "A",
+    "D",
+    "H"
+  ],
+  "walk_forward": {
+    "seasons": [
+      "2019-20",
+      "2020-21",
+      "2021-22",
+      "2022-23",
+      "2023-24",
+      "2024-25"
+    ],
+    "held_out_matches": 808,
+    "scores": {
+      "val_log_loss": 0.9271690373351987,
+      "val_brier": 0.5446786737664703,
+      "val_accuracy": 0.5891089108910891,
+      "val_mean_p_D": 0.190532564171265,
+      "val_share_over_90": 0.013613861386138614,
+      "train_log_loss": 0.9305256692387194,
+      "gap": -0.003356631903520646,
+      "log_loss_2024-25": 0.9355491679486626
+    },
+    "prior": {
+      "val_log_loss": 1.0407236454146684,
+      "val_brier": 0.6296948332799917,
+      "val_accuracy": 0.4665841584158416,
+      "val_mean_p_D": 0.21359236291828276,
+      "val_share_over_90": 0.0,
+      "train_log_loss": 1.0490669026936292,
+      "gap": -0.008343257278960792,
+      "log_loss_2024-25": 1.0010592518415464
+    },
+    "vs_prior_bootstrap": {
+      "mean_diff": -0.11355460807946989,
+      "low": -0.14780920903085693,
+      "high": -0.07836846780127857,
+      "n": 808
+    },
+    "grid_runner_up": "rf_leaf20",
+    "grid_winner_vs_runner_up_bootstrap": {
+      "mean_diff": -0.0032485450601328555,
+      "low": -0.020228791120761487,
+      "high": 0.013861569263854975,
+      "n": 808
+    }
+  },
+  "selection_rule": "docs/data_notes.md, 'Selection rule (fixed 2026-11-10, before any Part C result)'",
+  "validation_comparisons": 29,
+  "random_seed": 42,
+  "versions": {
+    "python": "3.12.6",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "git": {
+    "commit": "5edd561bc99d9a30d6311df587147a20d4bd2bc1",
+    "dirty": false
+  }
+}
