@@ -99,6 +99,32 @@ def assert_chronological_split(
             )
 
 
+def walk_forward_folds(
+    df: pd.DataFrame, seasons: list[str], roles: dict[str, str] | None = None,
+) -> list[tuple[str, pd.DataFrame, pd.DataFrame]]:
+    """Expanding-window folds: [(season, fit_rows, score_rows), ...] in season order.
+
+    For each season N in `seasons`, fit_rows are all train/validation seasons before N
+    and score_rows are season N. Warm-up seasons are never fitted on or scored; test
+    seasons are never used at all (raises if one is requested).
+    """
+    roles = season_roles() if roles is None else roles
+    usable = sorted(s for s, r in roles.items() if r in ("train", "validation"))
+    not_usable = sorted(set(seasons) - set(usable))
+    if not_usable:
+        raise ValueError(f"Walk-forward seasons must be train/validation seasons, not {not_usable}")
+    folds = []
+    for season in sorted(seasons):
+        fit_rows = df[df["season"].isin([s for s in usable if s < season])].sort_values("date", kind="stable")
+        score_rows = df[df["season"] == season].sort_values("date", kind="stable")
+        if fit_rows.empty or score_rows.empty:
+            raise ValueError(f"Fold {season} has no training or no scoring matches")
+        if fit_rows["date"].max() >= score_rows["date"].min():
+            raise ValueError(f"Fold {season}: training data does not end before scoring starts")
+        folds.append((season, fit_rows, score_rows))
+    return folds
+
+
 def split_features_target(
     df: pd.DataFrame, feature_cols: list[str] = ALLOWED_FEATURES,
 ) -> tuple[pd.DataFrame, pd.Series]:

@@ -13,6 +13,12 @@ Column order: scikit-learn sorts labels, so predict_proba columns follow
 model.classes_ = ["A", "D", "H"]. predict_proba_frame renames them by label and returns
 H, D, A, so a column can never be read as the wrong outcome.
 
+Walk-forward (Milestone 7): walk_forward_evaluate refits a fresh copy of every model on
+each fold (split.walk_forward_folds) and scores both the fold's training matches
+(in-sample, to show overfitting) and its held-out season. summarise_walk_forward pools
+the held-out seasons, weighting each by its number of matches; paired_bootstrap gives
+an interval for the per-match log loss difference between two models.
+
 TODO (Milestone 8):
 - plot_confusion_matrix(model, X, y) -> matplotlib.figure.Figure
     Actual vs predicted H / D / A counts.
@@ -22,9 +28,12 @@ TODO (Milestone 8):
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.metrics import log_loss
 
+from src.config import RANDOM_SEED
 from src.features.build_features import RESULT_CLASSES
+from src.training.split import split_features_target
 
 
 def predict_proba_frame(model, X: pd.DataFrame) -> pd.DataFrame:
@@ -75,3 +84,77 @@ def evaluate_models(models: dict, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame
     """One row per fitted model on the same matches, sorted by log loss (best first)."""
     rows = {name: evaluate_probabilities(y, predict_proba_frame(model, X)) for name, model in models.items()}
     return pd.DataFrame.from_dict(rows, orient="index").sort_values("log_loss")
+
+
+def per_match_log_loss(y_true: pd.Series, proba: pd.DataFrame) -> np.ndarray:
+    """-ln(probability given to the actual result), per match.
+
+    Clipped like scikit-learn's log_loss (at float eps), so its mean equals log_loss.
+    """
+    p = proba.to_numpy()[np.arange(len(y_true)), proba.columns.get_indexer(y_true)]
+    eps = np.finfo(float).eps
+    return -np.log(np.clip(p, eps, 1 - eps))
+
+
+def walk_forward_evaluate(models: dict, folds: list) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Refit a fresh clone of every model on each fold and score it.
+
+    folds: output of split.walk_forward_folds, [(season, fit_rows, score_rows), ...].
+    Returns (scores, predictions):
+    - scores: one row per (model, season, set), set "train" (in-sample) or "validation",
+      with n and the evaluate_probabilities metrics;
+    - predictions: one row per (model, held-out match), indexed like the feature table,
+      with model, season, result and the H / D / A probabilities.
+    """
+    score_rows, prediction_frames = [], []
+    for season, fit_rows, held_out in folds:
+        X_fit, y_fit = split_features_target(fit_rows)
+        X_val, y_val = split_features_target(held_out)
+        for name, model in models.items():
+            fitted = clone(model).fit(X_fit, y_fit)  # clone: unfitted copy, nothing carried between folds
+            for set_name, X, y in (("train", X_fit, y_fit), ("validation", X_val, y_val)):
+                proba = predict_proba_frame(fitted, X)
+                score_rows.append({"model": name, "season": season, "set": set_name, "n": len(y),
+                                   **evaluate_probabilities(y, proba)})
+            prediction_frames.append(proba.assign(model=name, season=season, result=y_val))
+    return pd.DataFrame(score_rows), pd.concat(prediction_frames)
+
+
+def summarise_walk_forward(scores: pd.DataFrame, focus_season: str | None = None) -> pd.DataFrame:
+    """One row per model, best pooled validation log loss first.
+
+    val_*: held-out seasons pooled, each weighted by its number of matches (the same as
+    scoring all held-out matches together). train_log_loss: mean in-sample log loss
+    over the folds; gap = val_log_loss - train_log_loss (large gap = overfitting).
+    focus_season adds that fold's held-out log loss as its own column.
+    """
+    metrics = ["log_loss", "brier", "accuracy", "mean_p_D"]
+    val = scores[scores["set"] == "validation"]
+    weighted = val[metrics].mul(val["n"], axis=0).groupby(val["model"]).sum()
+    summary = weighted.div(val.groupby("model")["n"].sum(), axis=0).add_prefix("val_")
+    summary["train_log_loss"] = scores[scores["set"] == "train"].groupby("model")["log_loss"].mean()
+    summary["gap"] = summary["val_log_loss"] - summary["train_log_loss"]
+    if focus_season is not None:
+        focus = val[val["season"] == focus_season].set_index("model")["log_loss"]
+        summary[f"log_loss_{focus_season}"] = focus
+    return summary.sort_values("val_log_loss")
+
+
+def paired_bootstrap(
+    predictions: pd.DataFrame, model: str, reference: str, n_boot: int = 5000, seed: int = RANDOM_SEED,
+) -> dict[str, float]:
+    """Mean per-match log loss of `model` minus `reference` on the same held-out matches,
+    with a 95% percentile interval from resampling matches (negative = model better).
+
+    Matches are resampled independently, ignoring that matches of one season share
+    conditions, so the interval is, if anything, a little too narrow.
+    """
+    losses = {}
+    for name in (model, reference):
+        rows = predictions[predictions["model"] == name].sort_index()
+        losses[name] = per_match_log_loss(rows["result"], rows[RESULT_CLASSES])
+    diff = losses[model] - losses[reference]
+    rng = np.random.default_rng(seed)
+    boots = np.array([diff[rng.integers(0, len(diff), len(diff))].mean() for _ in range(n_boot)])
+    return {"mean_diff": float(diff.mean()), "low": float(np.quantile(boots, 0.025)),
+            "high": float(np.quantile(boots, 0.975)), "n": len(diff)}

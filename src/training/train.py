@@ -29,9 +29,12 @@ Numeric branches end with StandardScaler, so every weight is "per standard devia
 and the L2 penalty treats features alike. Medians, means and standard deviations are
 learned in fit(), i.e. from the training matches only.
 
+Milestone 7, part B: build_random_forest and build_hist_gradient_boosting reuse the
+preprocessor without scaling (trees split on thresholds); HistGradientBoosting also skips
+imputation (it handles NaN itself). build_candidate_models lists every model compared
+under walk-forward validation (evaluate.walk_forward_evaluate).
+
 TODO (Milestone 7):
-- build_candidate_models() -> dict[str, Pipeline]
-    Name -> unfitted Pipeline for each candidate, including the Dummy baseline.
 - save_model(model: Pipeline, metadata: dict, path: Path) -> None
     Save with joblib to MODELS_DIR, with metadata such as the training data cutoff.
 """
@@ -39,6 +42,7 @@ TODO (Milestone 7):
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline, make_pipeline
@@ -87,25 +91,40 @@ def group_stages(stages: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def build_preprocessor(features: list[str] = ALLOWED_FEATURES) -> ColumnTransformer:
+def to_float(X: pd.DataFrame) -> pd.DataFrame:
+    """Numeric columns as float (pd.NA in Int64 columns -> NaN, booleans -> 0/1)."""
+    return X.astype(float)
+
+
+def build_preprocessor(
+    features: list[str] = ALLOWED_FEATURES, scale: bool = True, impute: bool = True,
+) -> ColumnTransformer:
     """Unfitted ColumnTransformer for `features` (see the module docstring).
 
-    Raises if a feature belongs to no branch, so no column is silently dropped.
+    scale=False drops the StandardScalers (trees split on thresholds, so units do not
+    matter). impute=False leaves missing values as NaN for models that handle them
+    (HistGradientBoosting). Raises if a feature belongs to no branch, so no column is
+    silently dropped.
     """
     unassigned = sorted(set(features) - set(ALLOWED_FEATURES))
     if unassigned:
         raise ValueError(f"Features without a preprocessing branch: {unassigned}")
+
     def pick(group: list[str]) -> list[str]:
         return [c for c in group if c in features]
 
+    def numeric(imputer: SimpleImputer | None) -> Pipeline:
+        first = imputer if impute and imputer is not None else FunctionTransformer(
+            to_float, feature_names_out="one-to-one")
+        return make_pipeline(first, *([StandardScaler()] if scale else []))
+
     branches = [
-        ("form", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()), pick(FORM_VALUE_FEATURES)),
-        ("first_leg", make_pipeline(SimpleImputer(strategy="constant", fill_value=0), StandardScaler()),
-         pick(FIRST_LEG_FEATURES)),
-        ("numeric", StandardScaler(), pick(OTHER_NUMERIC_FEATURES)),
+        ("form", numeric(SimpleImputer(strategy="median")), pick(FORM_VALUE_FEATURES)),
+        ("first_leg", numeric(SimpleImputer(strategy="constant", fill_value=0)), pick(FIRST_LEG_FEATURES)),
+        ("numeric", numeric(None), pick(OTHER_NUMERIC_FEATURES)),
         ("stage", make_pipeline(FunctionTransformer(group_stages, feature_names_out="one-to-one"),
-                                OneHotEncoder(handle_unknown="ignore")), pick(["stage"])),
-        ("leg_type", OneHotEncoder(handle_unknown="ignore"), pick(["leg_type"])),
+                                OneHotEncoder(handle_unknown="ignore", sparse_output=False)), pick(["stage"])),
+        ("leg_type", OneHotEncoder(handle_unknown="ignore", sparse_output=False), pick(["leg_type"])),
     ]
     return ColumnTransformer([branch for branch in branches if branch[2]])
 
@@ -116,6 +135,41 @@ def build_logistic_regression(C: float = 1.0, features: list[str] = ALLOWED_FEAT
         ("preprocess", build_preprocessor(features)),
         ("model", LogisticRegression(C=C, max_iter=1000)),
     ])
+
+
+def build_random_forest(features: list[str] = ALLOWED_FEATURES, **params) -> Pipeline:
+    """Unfitted Pipeline: imputation (no scaling) -> Random Forest of 500 trees.
+
+    Other RandomForestClassifier defaults (fully grown trees) unless given in params.
+    """
+    return Pipeline([
+        ("preprocess", build_preprocessor(features, scale=False)),
+        ("model", RandomForestClassifier(**{"n_estimators": 500, "random_state": RANDOM_SEED,
+                                            "n_jobs": -1, **params})),
+    ])
+
+
+def build_hist_gradient_boosting(features: list[str] = ALLOWED_FEATURES, **params) -> Pipeline:
+    """Unfitted Pipeline: no imputation, no scaling -> HistGradientBoostingClassifier.
+
+    Missing values stay NaN: each split learns which side they go to. early_stopping is
+    off because it would hold out a RANDOM 10% of the training matches, not later ones.
+    """
+    return Pipeline([
+        ("preprocess", build_preprocessor(features, scale=False, impute=False)),
+        ("model", HistGradientBoostingClassifier(**{"random_state": RANDOM_SEED,
+                                                    "early_stopping": False, **params})),
+    ])
+
+
+def build_candidate_models() -> dict[str, Pipeline | DummyClassifier]:
+    """Name -> unfitted model for the Milestone 7 comparison, prior baseline included."""
+    return {
+        "prior": build_baselines()["prior"],
+        "logistic_regression": build_logistic_regression(),
+        "random_forest": build_random_forest(),
+        "hist_gradient_boosting": build_hist_gradient_boosting(),
+    }
 
 
 def build_baselines() -> dict[str, DummyClassifier]:
@@ -135,20 +189,27 @@ def train_models(models: dict, X_train: pd.DataFrame, y_train: pd.Series) -> dic
 
 
 if __name__ == "__main__":
-    from src.config import PROCESSED_DATA_DIR
+    from src.config import PROCESSED_DATA_DIR, VALIDATION_SEASONS, WALK_FORWARD_SEASONS
     from src.features.build_features import FEATURE_TABLE_FILE, load_feature_table
-    from src.training.evaluate import evaluate_models
-    from src.training.split import chronological_split, split_features_target
+    from src.training.evaluate import paired_bootstrap, summarise_walk_forward, walk_forward_evaluate
+    from src.training.split import chronological_split, walk_forward_folds
 
     # The test set is unpacked as `_` on purpose: it stays sealed until Milestone 8.
     train, validation, _ = chronological_split(load_feature_table(PROCESSED_DATA_DIR / FEATURE_TABLE_FILE))
-    X_train, y_train = split_features_target(train)
-    X_val, y_val = split_features_target(validation)
-    models = train_models({**build_baselines(), "logistic_regression": build_logistic_regression()},
-                          X_train, y_train)
-    print(f"Fitted on {len(train)} training matches, scored on {len(validation)} "
-          f"validation matches (actual H/D/A: "
-          f"{', '.join(f'{y_val.eq(c).mean():.3f}' for c in ('H', 'D', 'A'))})")
-    print(evaluate_models(models, X_val, y_val).round(4).to_string())
-    print("\nSame models on their own training matches (in-sample, optimistic):")
-    print(evaluate_models(models, X_train, y_train).round(4).to_string())
+    folds = walk_forward_folds(pd.concat([train, validation]), WALK_FORWARD_SEASONS)
+    print("Walk-forward folds (expanding window):")
+    for season, fit_rows, held_out in folds:
+        print(f"  score {season} ({len(held_out)} matches) <- fit on "
+              f"{fit_rows['season'].min()} to {fit_rows['season'].max()} ({len(fit_rows)})")
+    scores, predictions = walk_forward_evaluate(build_candidate_models(), folds)
+    print(f"\nPooled over {predictions['season'].eq(predictions['season']).sum() // scores['model'].nunique()} "
+          f"held-out matches (val_*), mean in-sample fold score (train_log_loss):")
+    print(summarise_walk_forward(scores, focus_season=VALIDATION_SEASONS[-1]).round(4).to_string())
+    print("\nHeld-out log loss per season:")
+    held = scores[scores["set"] == "validation"]
+    print(held.pivot(index="model", columns="season", values="log_loss").round(4).to_string())
+    print("\nPer-match log loss difference, 95% paired bootstrap interval (negative = first model better):")
+    for model, reference in [(m, "prior") for m in ("logistic_regression", "random_forest", "hist_gradient_boosting")] + [
+            ("random_forest", "logistic_regression"), ("hist_gradient_boosting", "logistic_regression")]:
+        b = paired_bootstrap(predictions, model, reference)
+        print(f"  {model} - {reference}: {b['mean_diff']:+.4f} [{b['low']:+.4f}, {b['high']:+.4f}]")

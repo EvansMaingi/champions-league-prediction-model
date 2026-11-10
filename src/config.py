@@ -37,6 +37,12 @@ TRAIN_SEASONS: list[str] = [f"{y}-{str(y + 1)[-2:]}" for y in range(2012, 2024)]
 VALIDATION_SEASONS: list[str] = ["2024-25"]
 TEST_SEASONS: list[str] = ["2025-26"]
 
+# --- Walk-forward validation (Milestone 7) -----------------------------------
+# One validation season (189 matches) cannot separate models (bootstrap interval of
+# LR - prior included 0). Each season below is scored by a model trained on all earlier
+# train/validation seasons (expanding window): 808 scored matches. Never a test season.
+WALK_FORWARD_SEASONS: list[str] = ["2019-20", "2020-21", "2021-22", "2022-23", "2023-24", "2024-25"]
+
 # --- Data sources ------------------------------------------------------------
 # Historical results: openfootball/champions-league (CC0-1.0 public domain).
 OPENFOOTBALL_BASE_URL: str = (

@@ -7,6 +7,7 @@ inputs (stage, missing values), never their results. The test season is not load
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.preprocessing import StandardScaler
 
 from src.config import PROCESSED_DATA_DIR
 from src.features.build_features import ALLOWED_FEATURES, FEATURE_TABLE_FILE, RESULT_CLASSES, load_feature_table
@@ -14,7 +15,8 @@ from src.training.evaluate import predict_proba_frame
 from src.training.split import chronological_split, split_features_target
 from src.training.train import (
     CATEGORICAL_FEATURES, FIRST_LEG_FEATURES, FORM_VALUE_FEATURES, OTHER_NUMERIC_FEATURES,
-    STAGE_GROUPS, build_logistic_regression, build_preprocessor, group_stages,
+    STAGE_GROUPS, build_candidate_models, build_hist_gradient_boosting, build_logistic_regression,
+    build_preprocessor, build_random_forest, group_stages,
 )
 
 
@@ -113,3 +115,39 @@ def test_unknown_stage_at_prediction_time_raises(fitted_lr, train_and_validation
     fixture = X_val.iloc[[0]].assign(stage="super_league")
     with pytest.raises(ValueError, match="super_league"):
         fitted_lr.predict_proba(fixture)
+
+
+# --- tree models (part B) ---------------------------------------------------------------
+
+def test_tree_preprocessors_do_not_scale_and_only_random_forest_imputes(train_and_validation_inputs):
+    X_train, y_train, X_val = train_and_validation_inputs
+    rf_pre = build_random_forest().named_steps["preprocess"].fit(X_train)
+    hgb_pre = build_hist_gradient_boosting().named_steps["preprocess"].fit(X_train)
+    for pre in (rf_pre, hgb_pre):
+        steps = [step for _, branch, _ in pre.transformers_ if hasattr(branch, "steps") for _, step in branch.steps]
+        assert not any(isinstance(step, StandardScaler) for step in steps)
+    names = list(hgb_pre.get_feature_names_out())
+    hgb_out = pd.DataFrame(hgb_pre.transform(X_val), columns=names)
+    rf_out = pd.DataFrame(rf_pre.transform(X_val), columns=names)
+    first_leg = "first_leg__first_leg_goal_diff"
+    assert hgb_out[first_leg].isna().sum() == X_val["first_leg_goal_diff"].isna().sum() > 0  # NaN kept
+    assert not rf_out.isna().any().any()
+    assert (rf_out.loc[X_val["first_leg_goal_diff"].isna().to_numpy(), first_leg] == 0).all()
+
+
+def test_hist_gradient_boosting_does_not_use_random_early_stopping():
+    assert build_hist_gradient_boosting().named_steps["model"].early_stopping is False
+
+
+@pytest.mark.parametrize("builder", [build_random_forest, build_hist_gradient_boosting])
+def test_tree_models_give_valid_probabilities(builder, train_and_validation_inputs):
+    X_train, y_train, X_val = train_and_validation_inputs
+    model = builder(n_estimators=20) if builder is build_random_forest else builder(max_iter=20)
+    proba = predict_proba_frame(model.fit(X_train, y_train), X_val)
+    assert list(proba.columns) == RESULT_CLASSES
+    assert ((proba >= 0) & (proba <= 1)).all().all()
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+
+
+def test_candidate_models_include_the_prior_baseline():
+    assert set(build_candidate_models()) == {"prior", "logistic_regression", "random_forest", "hist_gradient_boosting"}

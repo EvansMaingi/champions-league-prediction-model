@@ -339,6 +339,47 @@ in time):
   and Elo are strongly correlated; the model splits their shared signal between them.
 - **Comparisons made on validation so far: 1** (LR, C = 1.0).
 
+### Part B: walk-forward validation, Random Forest, HistGradientBoosting
+
+- **Walk-forward** (`config.WALK_FORWARD_SEASONS`, `split.walk_forward_folds`): expanding
+  window, 6 folds. Score season N (2019-20 to 2024-25) with a model fitted on 2012-13 to
+  N-1 (875 to 1,494 matches). 808 held-out matches; every fold refits everything
+  (imputer, scaler, model). The 2024-25 fold is exactly the Milestone 6 split (LR scores
+  0.9275 there, as in Part A). A test season raises. Caveat: 619 of 808 held-out
+  matches are old-format seasons, so the 2024-25 fold is also reported on its own.
+- **Counting rule:** each model configuration scored on validation data counts once,
+  however many folds. Milestone 6 baselines do not count.
+- **Models (untuned):** RF 500 trees, otherwise defaults (fully grown trees), median / 0
+  imputation, no scaling. HGB defaults (100 iterations, learning rate 0.1, 31 leaves),
+  NaN kept, no scaling, `early_stopping=False` (it would hold out a *random* 10%).
+- **Results** (`python -m src.training.train`):
+
+  | Model | Held-out log loss (808) | Brier | Accuracy | mean p(D) | Train log loss | Gap | 2024-25 |
+  |---|---|---|---|---|---|---|---|
+  | random forest | 0.9527 | 0.5640 | 0.5718 | 0.226 | 0.2471 | 0.7055 | 0.9548 |
+  | logistic regression | 1.0035 | 0.5758 | 0.5582 | 0.223 | 0.9102 | 0.0933 | 0.9275 |
+  | prior | 1.0407 | 0.6297 | 0.4666 | 0.214 | 1.0491 | -0.0083 | 1.0011 |
+  | hist gradient boosting | 1.3362 | 0.6789 | 0.5458 | 0.146 | 0.0700 | 1.2662 | 1.3641 |
+
+  Held-out log loss per season (2019-20 ... 2024-25): RF 0.925, 0.920, 0.986, 0.996,
+  0.933, 0.955; LR 1.173, 1.063, 0.936, 1.046, 0.923, 0.928; prior 1.057, 1.067, 1.055,
+  1.040, 1.046, 1.001; HGB 1.157, 1.262, 1.528, 1.521, 1.163, 1.364.
+- **Paired bootstrap** (808 matches, 5,000 resamples): LR - prior -0.037 [-0.086, +0.013];
+  RF - prior -0.088 [-0.118, -0.057]; HGB - prior +0.296 [+0.201, +0.394];
+  RF - LR -0.051 [-0.093, -0.013]; HGB - LR +0.333 [+0.247, +0.421].
+- **Overfitting:** RF fits its training matches almost perfectly (0.247) yet averaging 500
+  trees keeps its held-out probabilities moderate. Default HGB memorises (0.070) and is
+  confidently wrong: in the 2024-25 fold 36.5% of matches get a probability above 0.9,
+  and one actual result got 0.0004. LR's gap is small (0.093).
+- **LR and `behind_closed_doors` (finding for Part C):** before 2019-20 only 5 training
+  matches were behind closed doors, so StandardScaler turns the flag into 13.2 standard
+  deviations; a weight learned from 5 matches times 13 pushed every August 2020 match
+  to about 80% draw (mean log loss 2.92 on those 13 matches vs 0.96 on the other 106).
+  2020-21 is hit similarly. Trees are not affected. The flag is False for 2024-25 and
+  all 2026-27 fixtures, so the pooled LR score understates LR on matches like the
+  ones we will predict; RF vs LR on 2024-25 alone: 0.955 vs 0.928.
+- **Comparisons made on validation so far: 3** (LR C = 1.0; RF default; HGB default).
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's
