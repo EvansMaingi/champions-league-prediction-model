@@ -380,6 +380,29 @@ in time):
   ones we will predict; RF vs LR on 2024-25 alone: 0.955 vs 0.928.
 - **Comparisons made on validation so far: 3** (LR C = 1.0; RF default; HGB default).
 
+### Selection rule (fixed 2026-11-10, before any Part C result)
+
+All scores are walk-forward over the 6 folds (808 held-out matches); 2025-26 is never used.
+
+1. **Exclusion (severe miscalibration):** a configuration is excluded if more than 2% of
+   its held-out matches get a probability above 0.9 for any outcome.
+2. **Main criterion:** lowest pooled walk-forward log loss.
+3. **Tie-break:** the runner-up is the best configuration of a *different* model family.
+   If the paired bootstrap 95% interval of best minus runner-up includes 0, choose the
+   simpler family: LR < RF < HGB. Within a family the lowest pooled log loss is taken.
+4. **Sanity check:** the winner must beat the prior on the 2024-25 fold. If it does not,
+   stop and discuss before saving anything.
+5. **Experiments after the model grid** (Elo, feature groups, team identity, recency) are
+   run on the winning configuration, each against its current setting. A variant
+   replaces the current setting if (a) its pooled log loss is lower and the bootstrap
+   interval of variant minus current excludes 0, or (b) it is simpler and the interval
+   includes 0 (not shown to be worse). If several qualify, the lowest pooled log loss
+   wins. Simpler means: Elo K = 20 and newcomer start 1500 (fixed in advance) over any
+   alternative; fewer features over more; no team identity; no recency weighting. If
+   more than one experiment changes the setting, the combination is scored once more
+   and must still pass (a) or (b) against the grid winner.
+6. **Counting:** every configuration scored on validation data counts once.
+
 ## Decisions for later milestones
 
 - **Milestone 6: 2011-12 is a warm-up season.** The data starts in 2011-12, so every club's
