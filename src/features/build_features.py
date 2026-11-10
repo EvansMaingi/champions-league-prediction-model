@@ -113,6 +113,9 @@ DERIVED_PRE_MATCH: list[str] = [*FORM_FEATURES, *ELO_FEATURES, *CONTEXT_DERIVED]
 # stage_raw and neutral_reason (redundant), rest days and head-to-head (dropped in
 # Part C, see docs/data_notes.md).
 ALLOWED_FEATURES: list[str] = [*FORM_FEATURES, *ELO_FEATURES, *CONTEXT_FEATURES]
+# Team names, for the Milestone 7 team-identity experiment only (pre-match, but not on
+# the allowlist: they must be requested explicitly, see split.split_features_target).
+IDENTITY_FEATURES: list[str] = ["home_team", "away_team"]
 
 COLUMN_ROLES: dict[str, str] = {
     **{column: "pre_match" for column in PRE_MATCH},
@@ -293,28 +296,18 @@ def elo_expected(rating: float, opponent: float, home_advantage: float = 0.0) ->
     return 1.0 / (1.0 + 10 ** ((opponent - (rating + home_advantage)) / 400.0))
 
 
-def add_elo_features(
-    df: pd.DataFrame,
-    k: float = ELO_K,
-    home_advantage: float = ELO_HOME_ADVANTAGE,
-    season_regression: float = ELO_SEASON_REGRESSION,
-    start: float = ELO_START,
-) -> pd.DataFrame:
-    """Add each side's Elo rating BEFORE kickoff, computed sequentially over CL matches.
-
-    For each match in kickoff order: record both pre-match ratings, then update them from
-    the 90-minute result. Home advantage applies only when the home side is really at
-    home (not neutral_venue, not played_abroad). When a new season starts, every rating
-    moves `season_regression` of the way back to `start`. A team's first ever match uses
-    `start`; *_elo_n (matches rated before this one) shows how established a rating is.
-
-    Adds: home_elo, away_elo, elo_diff (home - away, without home advantage),
-    home_elo_n, away_elo_n.
-    """
+def _elo_pass(
+    df: pd.DataFrame, k: float, home_advantage: float, season_regression: float, start: float,
+    newcomer_start: float | None,
+) -> tuple[dict[str, pd.Series], dict[tuple[str, str], float]]:
+    """One sequential Elo pass. Returns (pre-match values per row, rating at each
+    (season, team)'s last match of that season, after its update)."""
     order = df.sort_values(["kickoff_utc"], kind="stable").index
     ratings: dict[str, float] = {}
     played: dict[str, int] = {}
+    season_end: dict[tuple[str, str], float] = {}
     pre = {name: pd.Series(index=df.index, dtype=float) for name in ("home_elo", "away_elo", "home_elo_n", "away_elo_n")}
+    first_season = df.loc[order[0], "season"] if len(df) else None
     season = None
 
     for index in order:
@@ -323,8 +316,11 @@ def add_elo_features(
             if season is not None:  # summer break: regress every rating toward the mean
                 ratings = {team: r - season_regression * (r - start) for team, r in ratings.items()}
             season = row["season"]
+        # A club first seen after the first season is a newcomer; clubs in the first
+        # season are not (their earlier history is just missing from the data).
+        initial = start if newcomer_start is None or season == first_season else newcomer_start
         home, away = row["home_team"], row["away_team"]
-        r_home, r_away = ratings.get(home, start), ratings.get(away, start)
+        r_home, r_away = ratings.get(home, initial), ratings.get(away, initial)
         pre["home_elo"][index], pre["away_elo"][index] = r_home, r_away
         pre["home_elo_n"][index], pre["away_elo_n"][index] = played.get(home, 0), played.get(away, 0)
 
@@ -334,12 +330,57 @@ def add_elo_features(
         change = k * (actual - expected)
         ratings[home], ratings[away] = r_home + change, r_away - change
         played[home], played[away] = played.get(home, 0) + 1, played.get(away, 0) + 1
+        season_end[(season, home)], season_end[(season, away)] = ratings[home], ratings[away]
+    return pre, season_end
 
+
+def add_elo_features(
+    df: pd.DataFrame,
+    k: float = ELO_K,
+    home_advantage: float = ELO_HOME_ADVANTAGE,
+    season_regression: float = ELO_SEASON_REGRESSION,
+    start: float = ELO_START,
+    newcomer_start: float | None = None,
+) -> pd.DataFrame:
+    """Add each side's Elo rating BEFORE kickoff, computed sequentially over CL matches.
+
+    For each match in kickoff order: record both pre-match ratings, then update them from
+    the 90-minute result. Home advantage applies only when the home side is really at
+    home (not neutral_venue, not played_abroad). When a new season starts, every rating
+    moves `season_regression` of the way back to `start`. A team's first ever match uses
+    `start`, or `newcomer_start` (if given) for clubs first seen after the first season
+    in `df`; *_elo_n (matches rated before this one) shows how established a rating is.
+
+    Adds: home_elo, away_elo, elo_diff (home - away, without home advantage),
+    home_elo_n, away_elo_n.
+    """
+    pre, _ = _elo_pass(df, k, home_advantage, season_regression, start, newcomer_start)
     out = df.copy()
     for name, values in pre.items():
         out[name] = values.astype(int) if name.endswith("_n") else values
     out["elo_diff"] = out["home_elo"] - out["away_elo"]
     return out
+
+
+def empirical_newcomer_start(
+    df: pd.DataFrame, seasons: list[str], k: float = ELO_K,
+    home_advantage: float = ELO_HOME_ADVANTAGE, season_regression: float = ELO_SEASON_REGRESSION,
+    start: float = ELO_START,
+) -> float:
+    """Mean rating at which newcomers ended their first season, newcomers starting at `start`.
+
+    Only clubs whose first season is in `seasons` count (pass training seasons only, so
+    the value never uses the seasons it will be applied to); clubs in the first season of
+    `df` are not newcomers. Raises if there are none.
+    """
+    _, season_end = _elo_pass(df, k, home_advantage, season_regression, start, None)
+    long = pd.concat([df[["season", "home_team"]].rename(columns={"home_team": "team"}),
+                      df[["season", "away_team"]].rename(columns={"away_team": "team"})])
+    first = long.groupby("team")["season"].min()
+    first = first[(first != df["season"].min()) & first.isin(seasons)]
+    if first.empty:
+        raise ValueError(f"No newcomers with a first season in {seasons}")
+    return float(sum(season_end[(season, team)] for team, season in first.items()) / len(first))
 
 
 # --- Part C: context features (Milestone 5) ----------------------------------------
@@ -382,16 +423,17 @@ FEATURE_TABLE_FILE = "features.csv"
 FEATURE_TABLE_KEYS = ["season", "date", "kickoff_utc", "stage", "tie_id", "home_team", "away_team"]
 
 
-def build_feature_table(matches: pd.DataFrame) -> pd.DataFrame:
+def build_feature_table(matches: pd.DataFrame, elo_params: dict | None = None) -> pd.DataFrame:
     """Target + every allowed feature, one row per match, in chronological order.
 
     Columns: FEATURE_TABLE_KEYS (identifiers, for splitting and tracing), the target
     `result`, then ALLOWED_FEATURES. Models must select inputs with ALLOWED_FEATURES only.
+    elo_params: keyword arguments for add_elo_features (Milestone 7 Elo experiment).
     """
     assert_valid_features(ALLOWED_FEATURES, ALLOWED_FEATURES)
     table = add_result_target(matches)
     table = add_form_features(table)
-    table = add_elo_features(table)
+    table = add_elo_features(table, **(elo_params or {}))
     table = add_context_features(table)
     keys = list(dict.fromkeys(FEATURE_TABLE_KEYS))
     columns = keys + [TARGET] + [c for c in ALLOWED_FEATURES if c not in keys]

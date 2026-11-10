@@ -32,7 +32,7 @@ from sklearn.base import clone
 from sklearn.metrics import log_loss
 
 from src.config import RANDOM_SEED
-from src.features.build_features import RESULT_CLASSES
+from src.features.build_features import ALLOWED_FEATURES, RESULT_CLASSES
 from src.training.split import split_features_target
 
 
@@ -59,12 +59,14 @@ def multiclass_brier_score(y_true: pd.Series, proba: pd.DataFrame) -> float:
 
 
 def evaluate_probabilities(y_true: pd.Series, proba: pd.DataFrame) -> dict[str, float]:
-    """Log loss, Brier score, accuracy, and the mean predicted probability of each class.
+    """Log loss, Brier score, accuracy, the mean predicted probability of each class, and
+    share_over_90 (share of matches where one outcome gets more than 0.9).
 
     Accuracy takes the most likely class per match; ties go to the first column (H).
     Comparing mean_p_D with the actual draw rate shows draws being over/under-predicted.
     Log loss clips probabilities away from 0, so a hard "0% chance" that happens costs
-    about 36 nats for that match instead of infinity.
+    about 36 nats for that match instead of infinity. share_over_90 flags severe
+    overconfidence (selection rule: more than 2% excludes a model).
     """
     predicted = proba.idxmax(axis=1)
     # scikit-learn assumes probability columns are in sorted label order (A, D, H) and
@@ -77,6 +79,7 @@ def evaluate_probabilities(y_true: pd.Series, proba: pd.DataFrame) -> dict[str, 
     }
     for cls in proba.columns:
         metrics[f"mean_p_{cls}"] = float(proba[cls].mean())
+    metrics["share_over_90"] = float((proba.max(axis=1) > 0.9).mean())
     return metrics
 
 
@@ -96,22 +99,30 @@ def per_match_log_loss(y_true: pd.Series, proba: pd.DataFrame) -> np.ndarray:
     return -np.log(np.clip(p, eps, 1 - eps))
 
 
-def walk_forward_evaluate(models: dict, folds: list) -> tuple[pd.DataFrame, pd.DataFrame]:
+def walk_forward_evaluate(
+    models: dict, folds: list, extra_features: list[str] = (), sample_weight=None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Refit a fresh clone of every model on each fold and score it.
 
     folds: output of split.walk_forward_folds, [(season, fit_rows, score_rows), ...].
+    extra_features: columns passed to the models besides ALLOWED_FEATURES (an
+    experiment, e.g. team names). sample_weight: optional function fit_rows -> weights,
+    passed to the final model step when fitting (in-sample scores stay unweighted).
     Returns (scores, predictions):
     - scores: one row per (model, season, set), set "train" (in-sample) or "validation",
       with n and the evaluate_probabilities metrics;
     - predictions: one row per (model, held-out match), indexed like the feature table,
       with model, season, result and the H / D / A probabilities.
     """
+    features = [*ALLOWED_FEATURES, *extra_features]
     score_rows, prediction_frames = [], []
     for season, fit_rows, held_out in folds:
-        X_fit, y_fit = split_features_target(fit_rows)
-        X_val, y_val = split_features_target(held_out)
+        X_fit, y_fit = split_features_target(fit_rows, features, allowed=features)
+        X_val, y_val = split_features_target(held_out, features, allowed=features)
+        fit_params = {} if sample_weight is None else {"model__sample_weight": sample_weight(fit_rows)}
         for name, model in models.items():
-            fitted = clone(model).fit(X_fit, y_fit)  # clone: unfitted copy, nothing carried between folds
+            # clone: an unfitted copy, so nothing is carried from one fold to the next
+            fitted = clone(model).fit(X_fit, y_fit, **fit_params)
             for set_name, X, y in (("train", X_fit, y_fit), ("validation", X_val, y_val)):
                 proba = predict_proba_frame(fitted, X)
                 score_rows.append({"model": name, "season": season, "set": set_name, "n": len(y),
@@ -128,7 +139,7 @@ def summarise_walk_forward(scores: pd.DataFrame, focus_season: str | None = None
     over the folds; gap = val_log_loss - train_log_loss (large gap = overfitting).
     focus_season adds that fold's held-out log loss as its own column.
     """
-    metrics = ["log_loss", "brier", "accuracy", "mean_p_D"]
+    metrics = ["log_loss", "brier", "accuracy", "mean_p_D", "share_over_90"]
     val = scores[scores["set"] == "validation"]
     weighted = val[metrics].mul(val["n"], axis=0).groupby(val["model"]).sum()
     summary = weighted.div(val.groupby("model")["n"].sum(), axis=0).add_prefix("val_")

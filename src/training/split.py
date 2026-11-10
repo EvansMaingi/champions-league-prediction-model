@@ -126,15 +126,16 @@ def walk_forward_folds(
 
 
 def split_features_target(
-    df: pd.DataFrame, feature_cols: list[str] = ALLOWED_FEATURES,
+    df: pd.DataFrame, feature_cols: list[str] = ALLOWED_FEATURES, allowed: list[str] = ALLOWED_FEATURES,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Separate X (model inputs) from y (`result` as "H" / "D" / "A" strings).
 
     The features pass the Milestone 4/5 gate first, so a post-match or unclassified
-    column can never reach a model. y is plain strings because scikit-learn sorts the
-    labels into classes_ = ["A", "D", "H"] either way.
+    column can never reach a model. `allowed` widens the allowlist for an experiment
+    (e.g. team names); the pre-match role check still applies. y is plain strings
+    because scikit-learn sorts the labels into classes_ = ["A", "D", "H"] either way.
     """
-    assert_valid_features(feature_cols, ALLOWED_FEATURES)
+    assert_valid_features(feature_cols, allowed)
     return df[feature_cols].copy(), df[TARGET].astype(str)
 
 

@@ -22,23 +22,35 @@ has one branch per kind of column (see the *_FEATURES lists below):
   flags, in the "other numeric" branch, tell the model the value was imputed);
 - first-leg values: missing when the match is not a second leg -> 0, "not applicable"
   (leg_type tells the model which matches are second legs);
-- other numeric (counts, flags, Elo): no missing values;
+- continuous (counts, Elo): no missing values;
+- 0/1 flags (FLAG_FEATURES): passed through unscaled, for every model (rule below);
 - stage: mapped to groups that exist in both formats (STAGE_GROUPS), then one-hot;
 - leg_type: one-hot.
-Numeric branches end with StandardScaler, so every weight is "per standard deviation"
+Continuous branches end with StandardScaler, so every weight is "per standard deviation"
 and the L2 penalty treats features alike. Medians, means and standard deviations are
 learned in fit(), i.e. from the training matches only.
+
+Rule: only continuous features are scaled. A 0/1 flag already has a natural unit, and
+scaling divides it by sqrt(p(1-p)): a flag seen in 5 of 875 training matches becomes
+13 standard deviations, so a small, barely penalised weight learned from 5 matches is
+multiplied by 13 at prediction time (Part B: behind_closed_doors in 2019-20). Unscaled,
+a large effect needs a large weight, which L2 shrinks unless many matches support it.
+One-hot columns are 0/1 too and are never scaled.
 
 Milestone 7, part B: build_random_forest and build_hist_gradient_boosting reuse the
 preprocessor without scaling (trees split on thresholds); HistGradientBoosting also skips
 imputation (it handles NaN itself). build_candidate_models lists every model compared
 under walk-forward validation (evaluate.walk_forward_evaluate).
 
-TODO (Milestone 7):
-- save_model(model: Pipeline, metadata: dict, path: Path) -> None
-    Save with joblib to MODELS_DIR, with metadata such as the training data cutoff.
+Milestone 7, part C: season_age_weights (recency weighting), save_model / load_model.
+The grids, experiments and the selection rule live in src/training/experiments.py.
 """
 
+import json
+from pathlib import Path
+
+import joblib
+import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
@@ -48,8 +60,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
-from src.config import RANDOM_SEED
-from src.features.build_features import ALLOWED_FEATURES
+from src.config import MODELS_DIR, RANDOM_SEED
+from src.features.build_features import ALLOWED_FEATURES, IDENTITY_FEATURES
 
 # --- Column groups for the preprocessor (together exactly ALLOWED_FEATURES) ----------
 FORM_VALUE_FEATURES: list[str] = [
@@ -57,8 +69,13 @@ FORM_VALUE_FEATURES: list[str] = [
 ]
 FIRST_LEG_FEATURES: list[str] = ["first_leg_goal_diff", "first_leg_away_goals"]
 CATEGORICAL_FEATURES: list[str] = ["stage", "leg_type"]
-OTHER_NUMERIC_FEATURES: list[str] = [
-    c for c in ALLOWED_FEATURES if c not in FORM_VALUE_FEATURES + FIRST_LEG_FEATURES + CATEGORICAL_FEATURES
+FLAG_FEATURES: list[str] = [
+    "home_has_history", "away_has_history", "neutral_venue", "played_abroad", "behind_closed_doors",
+    "away_goals_rule",
+]
+CONTINUOUS_FEATURES: list[str] = [
+    c for c in ALLOWED_FEATURES
+    if c not in FORM_VALUE_FEATURES + FIRST_LEG_FEATURES + CATEGORICAL_FEATURES + FLAG_FEATURES
 ]
 
 # Raw stage -> a group that exists in training AND in the new 36-team format. Without
@@ -103,10 +120,11 @@ def build_preprocessor(
 
     scale=False drops the StandardScalers (trees split on thresholds, so units do not
     matter). impute=False leaves missing values as NaN for models that handle them
-    (HistGradientBoosting). Raises if a feature belongs to no branch, so no column is
-    silently dropped.
+    (HistGradientBoosting). Team names (IDENTITY_FEATURES, Part C experiment only) are
+    one-hot encoded; a team not seen in training becomes an all-zero row. Raises if a
+    feature belongs to no branch, so no column is silently dropped.
     """
-    unassigned = sorted(set(features) - set(ALLOWED_FEATURES))
+    unassigned = sorted(set(features) - set(ALLOWED_FEATURES) - set(IDENTITY_FEATURES))
     if unassigned:
         raise ValueError(f"Features without a preprocessing branch: {unassigned}")
 
@@ -121,10 +139,12 @@ def build_preprocessor(
     branches = [
         ("form", numeric(SimpleImputer(strategy="median")), pick(FORM_VALUE_FEATURES)),
         ("first_leg", numeric(SimpleImputer(strategy="constant", fill_value=0)), pick(FIRST_LEG_FEATURES)),
-        ("numeric", numeric(None), pick(OTHER_NUMERIC_FEATURES)),
+        ("continuous", numeric(None), pick(CONTINUOUS_FEATURES)),
+        ("flags", FunctionTransformer(to_float, feature_names_out="one-to-one"), pick(FLAG_FEATURES)),
         ("stage", make_pipeline(FunctionTransformer(group_stages, feature_names_out="one-to-one"),
                                 OneHotEncoder(handle_unknown="ignore", sparse_output=False)), pick(["stage"])),
         ("leg_type", OneHotEncoder(handle_unknown="ignore", sparse_output=False), pick(["leg_type"])),
+        ("identity", OneHotEncoder(handle_unknown="ignore", sparse_output=False), pick(IDENTITY_FEATURES)),
     ]
     return ColumnTransformer([branch for branch in branches if branch[2]])
 
@@ -186,6 +206,36 @@ def train_models(models: dict, X_train: pd.DataFrame, y_train: pd.Series) -> dic
     for model in models.values():
         model.fit(X_train, y_train)
     return models
+
+
+def season_age_weights(rows: pd.DataFrame, half_life: float) -> np.ndarray:
+    """Recency weight per training match: 0.5 ** (age / half_life).
+
+    age = how many seasons before the latest season in `rows` the match was played
+    (latest season: weight 1; `half_life` seasons earlier: weight 0.5).
+    """
+    seasons = sorted(rows["season"].unique())
+    age = {season: len(seasons) - 1 - i for i, season in enumerate(seasons)}
+    return 0.5 ** (rows["season"].map(age).to_numpy(dtype=float) / half_life)
+
+
+def save_model(model: Pipeline, metadata: dict, name: str, directory: Path = MODELS_DIR) -> tuple[Path, Path]:
+    """Save the fitted pipeline + metadata with joblib, and the metadata as readable JSON.
+
+    The .joblib file holds {"model": ..., "metadata": ...} (git-ignored); the .json file
+    is the same metadata for people to read. Returns both paths.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    model_path, metadata_path = directory / f"{name}.joblib", directory / f"{name}.json"
+    joblib.dump({"model": model, "metadata": metadata}, model_path)
+    metadata_path.write_text(json.dumps(metadata, indent=2, default=str), encoding="utf-8")
+    return model_path, metadata_path
+
+
+def load_model(path: Path) -> tuple[Pipeline, dict]:
+    """Load a pipeline saved by save_model; returns (model, metadata)."""
+    saved = joblib.load(path)
+    return saved["model"], saved["metadata"]
 
 
 if __name__ == "__main__":

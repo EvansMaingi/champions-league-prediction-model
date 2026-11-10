@@ -10,12 +10,14 @@ import pytest
 from sklearn.preprocessing import StandardScaler
 
 from src.config import PROCESSED_DATA_DIR
-from src.features.build_features import ALLOWED_FEATURES, FEATURE_TABLE_FILE, RESULT_CLASSES, load_feature_table
+from src.features.build_features import (
+    ALLOWED_FEATURES, FEATURE_TABLE_FILE, IDENTITY_FEATURES, RESULT_CLASSES, load_feature_table,
+)
 from src.training.evaluate import predict_proba_frame
 from src.training.split import chronological_split, split_features_target
 from src.training.train import (
-    CATEGORICAL_FEATURES, FIRST_LEG_FEATURES, FORM_VALUE_FEATURES, OTHER_NUMERIC_FEATURES,
-    STAGE_GROUPS, build_candidate_models, build_hist_gradient_boosting, build_logistic_regression,
+    CATEGORICAL_FEATURES, CONTINUOUS_FEATURES, FIRST_LEG_FEATURES, FLAG_FEATURES, FORM_VALUE_FEATURES,
+    STAGE_GROUPS, load_model, save_model, season_age_weights, build_candidate_models, build_hist_gradient_boosting, build_logistic_regression,
     build_preprocessor, build_random_forest, group_stages,
 )
 
@@ -38,7 +40,7 @@ def fitted_lr(train_and_validation_inputs):
 # --- column groups and stage mapping ------------------------------------------------
 
 def test_column_groups_cover_allowed_features_exactly_once():
-    groups = FORM_VALUE_FEATURES + FIRST_LEG_FEATURES + OTHER_NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    groups = FORM_VALUE_FEATURES + FIRST_LEG_FEATURES + CONTINUOUS_FEATURES + FLAG_FEATURES + CATEGORICAL_FEATURES
     assert len(groups) == len(set(groups))
     assert set(groups) == set(ALLOWED_FEATURES)
 
@@ -60,8 +62,8 @@ def test_every_real_stage_has_a_group(train_and_validation_inputs):
 
 
 def test_preprocessor_rejects_a_feature_without_a_branch():
-    with pytest.raises(ValueError, match="home_team"):
-        build_preprocessor([*ALLOWED_FEATURES, "home_team"])
+    with pytest.raises(ValueError, match="home_country"):
+        build_preprocessor([*ALLOWED_FEATURES, "home_country"])
 
 
 # --- the fitted preprocessor ---------------------------------------------------------
@@ -70,7 +72,7 @@ def test_preprocessor_keeps_every_feature_and_leaves_no_missing_values(fitted_lr
     _, _, X_val = train_and_validation_inputs
     preprocess = fitted_lr.named_steps["preprocess"]
     out = preprocess.transform(X_val)
-    numeric = len(FORM_VALUE_FEATURES) + len(FIRST_LEG_FEATURES) + len(OTHER_NUMERIC_FEATURES)
+    numeric = len(FORM_VALUE_FEATURES) + len(FIRST_LEG_FEATURES) + len(CONTINUOUS_FEATURES) + len(FLAG_FEATURES)
     stage_groups = len(set(STAGE_GROUPS.values()))
     leg_types = 4  # "1", "2", "single", "none"
     assert out.shape == (len(X_val), numeric + stage_groups + leg_types)
@@ -151,3 +153,46 @@ def test_tree_models_give_valid_probabilities(builder, train_and_validation_inpu
 
 def test_candidate_models_include_the_prior_baseline():
     assert set(build_candidate_models()) == {"prior", "logistic_regression", "random_forest", "hist_gradient_boosting"}
+
+
+# --- part C: flags, team identity, recency weights, saving ------------------------------
+
+def test_every_boolean_feature_is_a_flag_and_every_flag_is_boolean(train_and_validation_inputs):
+    """General rule: 0/1 features are never scaled, so each must be listed in FLAG_FEATURES."""
+    X_train, _, _ = train_and_validation_inputs
+    booleans = [c for c in ALLOWED_FEATURES if X_train[c].dtype == bool]
+    assert sorted(booleans) == sorted(FLAG_FEATURES)
+
+
+def test_logistic_regression_passes_flags_through_unscaled(fitted_lr, train_and_validation_inputs):
+    X_train, _, _ = train_and_validation_inputs
+    preprocess = fitted_lr.named_steps["preprocess"]
+    out = pd.DataFrame(preprocess.transform(X_train), columns=preprocess.get_feature_names_out(), index=X_train.index)
+    for flag in FLAG_FEATURES:
+        pd.testing.assert_series_equal(out[f"flags__{flag}"], X_train[flag].astype(float), check_names=False)
+    # continuous features are still standardised with training statistics
+    assert out["continuous__elo_diff"].mean() == pytest.approx(0, abs=1e-9)
+    assert out["continuous__elo_diff"].std(ddof=0) == pytest.approx(1)
+
+
+def test_identity_one_hot_gives_an_unknown_team_an_all_zero_row():
+    X = pd.DataFrame({"home_team": ["Real Madrid", "Ajax"], "away_team": ["Ajax", "Real Madrid"]})
+    pre = build_preprocessor(IDENTITY_FEATURES).fit(X)
+    out = pre.transform(pd.DataFrame({"home_team": ["Newcomer FC"], "away_team": ["Ajax"]}))
+    names = list(pre.get_feature_names_out())
+    assert out[0, [i for i, n in enumerate(names) if n.startswith("identity__home_team")]].sum() == 0
+    assert out[0, names.index("identity__away_team_Ajax")] == 1
+
+
+def test_season_age_weights_halve_every_half_life():
+    rows = pd.DataFrame({"season": ["2020-21", "2021-22", "2022-23", "2022-23"]})
+    np.testing.assert_allclose(season_age_weights(rows, half_life=2), [0.5, 0.5 ** 0.5, 1.0, 1.0])
+
+
+def test_saved_model_loads_with_metadata_and_same_probabilities(fitted_lr, train_and_validation_inputs, tmp_path):
+    _, _, X_val = train_and_validation_inputs
+    model_path, metadata_path = save_model(fitted_lr, {"training_data_cutoff": "2024-06-01"}, "unit", tmp_path)
+    loaded, metadata = load_model(model_path)
+    assert metadata == {"training_data_cutoff": "2024-06-01"}
+    assert metadata_path.read_text(encoding="utf-8").count("2024-06-01") == 1
+    pd.testing.assert_frame_equal(predict_proba_frame(loaded, X_val), predict_proba_frame(fitted_lr, X_val))

@@ -7,6 +7,7 @@ to check that every column it produces has a role.
 import pandas as pd
 import pytest
 
+from src.config import PROCESSED_DATA_DIR, TEST_SEASONS
 from src.data import clean
 from src.features import build_features as bf
 
@@ -424,3 +425,45 @@ def test_feature_table_round_trip(tmp_path):
     loaded = bf.load_feature_table(path)
     pd.testing.assert_frame_equal(table.reset_index(drop=True), loaded, check_dtype=False)
     assert loaded["result"].dtype == bf.RESULT_DTYPE and loaded["away_goals_rule"].dtype == bool
+
+
+# --- Milestone 7: Elo newcomer start ---------------------------------------------------
+
+WITH_NEWCOMER = pd.concat([SEQUENCE, matches([("2021-22", "2021-09-28", "E", "B", 1, 1)])], ignore_index=True)
+
+
+def test_newcomer_start_applies_only_to_clubs_first_seen_after_the_first_season():
+    df = bf.add_elo_features(WITH_NEWCOMER, newcomer_start=1400.0)
+    assert (df.loc[0, "home_elo"], df.loc[0, "away_elo"]) == (1500.0, 1500.0)  # first-season clubs
+    assert df.loc[5, "home_elo"] == 1400.0  # E, first seen in 2021-22
+    default = bf.add_elo_features(WITH_NEWCOMER)
+    pd.testing.assert_frame_equal(df.loc[:4, bf.ELO_FEATURES], default.loc[:4, bf.ELO_FEATURES])
+
+
+def test_empirical_newcomer_start_is_the_newcomers_end_of_first_season_rating():
+    df = bf.add_elo_features(WITH_NEWCOMER)
+    r_b = df.loc[5, "away_elo"]
+    expected = 1500 + bf.ELO_K * (0.5 - bf.elo_expected(1500, r_b, bf.ELO_HOME_ADVANTAGE))  # E drew 1-1 at home
+    assert bf.empirical_newcomer_start(WITH_NEWCOMER, ["2021-22"]) == pytest.approx(expected)
+
+
+def test_empirical_newcomer_start_ignores_seasons_not_listed():
+    later = pd.concat([WITH_NEWCOMER, matches([("2022-23", "2022-09-13", "F", "A", 5, 0)])], ignore_index=True)
+    assert bf.empirical_newcomer_start(later, ["2021-22"]) == bf.empirical_newcomer_start(WITH_NEWCOMER, ["2021-22"])
+    with pytest.raises(ValueError):
+        bf.empirical_newcomer_start(WITH_NEWCOMER, ["2020-21"])  # first-season clubs are not newcomers
+
+
+def test_rebuilt_table_without_test_season_matches_saved_features():
+    """Milestone 7 rebuilds features from matches.csv with the test season removed first;
+    with default Elo settings that must reproduce features.csv exactly."""
+    matches_path = PROCESSED_DATA_DIR / "matches.csv"
+    features_path = PROCESSED_DATA_DIR / bf.FEATURE_TABLE_FILE
+    if not (matches_path.exists() and features_path.exists()):
+        pytest.skip("processed data not built")
+    all_matches = clean.load_clean_matches(matches_path)
+    rebuilt = bf.build_feature_table(all_matches[~all_matches["season"].isin(TEST_SEASONS)]).reset_index(drop=True)
+    saved = bf.load_feature_table(features_path)
+    saved = saved[~saved["season"].isin(TEST_SEASONS)].reset_index(drop=True)
+    columns = [bf.TARGET, *bf.ALLOWED_FEATURES]
+    pd.testing.assert_frame_equal(rebuilt[columns].astype(object), saved[columns].astype(object), check_dtype=False)
