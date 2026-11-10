@@ -1,0 +1,115 @@
+"""Tests for the Milestone 7 preprocessing and model pipelines in src/training/train.py.
+
+Fitted on the real training seasons; validation rows are used only for their pre-match
+inputs (stage, missing values), never their results. The test season is not loaded.
+"""
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.config import PROCESSED_DATA_DIR
+from src.features.build_features import ALLOWED_FEATURES, FEATURE_TABLE_FILE, RESULT_CLASSES, load_feature_table
+from src.training.evaluate import predict_proba_frame
+from src.training.split import chronological_split, split_features_target
+from src.training.train import (
+    CATEGORICAL_FEATURES, FIRST_LEG_FEATURES, FORM_VALUE_FEATURES, OTHER_NUMERIC_FEATURES,
+    STAGE_GROUPS, build_logistic_regression, build_preprocessor, group_stages,
+)
+
+
+@pytest.fixture(scope="module")
+def train_and_validation_inputs():
+    """(X_train, y_train, X_val) from the real feature table."""
+    train, validation, _ = chronological_split(load_feature_table(PROCESSED_DATA_DIR / FEATURE_TABLE_FILE))
+    X_train, y_train = split_features_target(train)
+    X_val, _ = split_features_target(validation)
+    return X_train, y_train, X_val
+
+
+@pytest.fixture(scope="module")
+def fitted_lr(train_and_validation_inputs):
+    X_train, y_train, _ = train_and_validation_inputs
+    return build_logistic_regression().fit(X_train, y_train)
+
+
+# --- column groups and stage mapping ------------------------------------------------
+
+def test_column_groups_cover_allowed_features_exactly_once():
+    groups = FORM_VALUE_FEATURES + FIRST_LEG_FEATURES + OTHER_NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    assert len(groups) == len(set(groups))
+    assert set(groups) == set(ALLOWED_FEATURES)
+
+
+def test_group_stages_maps_both_formats_to_shared_groups():
+    stages = pd.DataFrame({"stage": ["group", "league", "playoff", "round_of_16", "final"]})
+    assert group_stages(stages)["stage"].tolist() == [
+        "group_or_league", "group_or_league", "round_of_16_or_playoff", "round_of_16_or_playoff", "final"]
+
+
+def test_group_stages_rejects_an_unknown_stage():
+    with pytest.raises(ValueError, match="super_league"):
+        group_stages(pd.DataFrame({"stage": ["league", "super_league"]}))
+
+
+def test_every_real_stage_has_a_group(train_and_validation_inputs):
+    X_train, _, X_val = train_and_validation_inputs
+    assert set(X_train["stage"]) | set(X_val["stage"]) <= set(STAGE_GROUPS)
+
+
+def test_preprocessor_rejects_a_feature_without_a_branch():
+    with pytest.raises(ValueError, match="home_team"):
+        build_preprocessor([*ALLOWED_FEATURES, "home_team"])
+
+
+# --- the fitted preprocessor ---------------------------------------------------------
+
+def test_preprocessor_keeps_every_feature_and_leaves_no_missing_values(fitted_lr, train_and_validation_inputs):
+    _, _, X_val = train_and_validation_inputs
+    preprocess = fitted_lr.named_steps["preprocess"]
+    out = preprocess.transform(X_val)
+    numeric = len(FORM_VALUE_FEATURES) + len(FIRST_LEG_FEATURES) + len(OTHER_NUMERIC_FEATURES)
+    stage_groups = len(set(STAGE_GROUPS.values()))
+    leg_types = 4  # "1", "2", "single", "none"
+    assert out.shape == (len(X_val), numeric + stage_groups + leg_types)
+    assert not np.isnan(out).any()
+
+
+def test_imputation_values_are_learned_from_training_data(fitted_lr, train_and_validation_inputs):
+    X_train, _, _ = train_and_validation_inputs
+    transformers = fitted_lr.named_steps["preprocess"].named_transformers_
+    form_imputer = transformers["form"].named_steps["simpleimputer"]
+    np.testing.assert_allclose(form_imputer.statistics_, X_train[FORM_VALUE_FEATURES].median().to_numpy())
+    # First-leg features: "not applicable" is 0, then scaled with the TRAINING mean/sd.
+    first_leg = transformers["first_leg"]
+    scaler = first_leg.named_steps["standardscaler"]
+    not_second_leg = pd.DataFrame({c: pd.array([pd.NA], dtype="Int64") for c in FIRST_LEG_FEATURES})
+    np.testing.assert_allclose(first_leg.transform(not_second_leg)[0], (0 - scaler.mean_) / scaler.scale_)
+    train_filled = X_train[FIRST_LEG_FEATURES].astype(float).fillna(0)
+    np.testing.assert_allclose(scaler.mean_, train_filled.mean().to_numpy())
+
+
+def test_new_format_stages_get_a_known_one_hot_column(fitted_lr, train_and_validation_inputs):
+    _, _, X_val = train_and_validation_inputs
+    preprocess = fitted_lr.named_steps["preprocess"]
+    out = pd.DataFrame(preprocess.transform(X_val), columns=preprocess.get_feature_names_out())
+    stage_columns = [c for c in out.columns if c.startswith("stage__")]
+    assert (out[stage_columns].sum(axis=1) == 1).all()  # never an all-zero (unknown) row
+
+
+# --- logistic regression ---------------------------------------------------------------
+
+def test_logistic_regression_gives_valid_probabilities_in_label_order(fitted_lr, train_and_validation_inputs):
+    _, _, X_val = train_and_validation_inputs
+    assert list(fitted_lr.classes_) == ["A", "D", "H"]
+    proba = predict_proba_frame(fitted_lr, X_val)
+    assert list(proba.columns) == RESULT_CLASSES
+    assert ((proba > 0) & (proba < 1)).all().all()
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0)
+
+
+def test_unknown_stage_at_prediction_time_raises(fitted_lr, train_and_validation_inputs):
+    _, _, X_val = train_and_validation_inputs
+    fixture = X_val.iloc[[0]].assign(stage="super_league")
+    with pytest.raises(ValueError, match="super_league"):
+        fitted_lr.predict_proba(fixture)

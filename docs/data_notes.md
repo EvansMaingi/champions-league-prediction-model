@@ -297,8 +297,8 @@ in time):
   cannot rank them; log loss and Brier can. Always-home's log loss is the clipped cost
   (about 36 per match) of the 92 non-home results it called impossible.
 - **Draw-rate shift (known limitation):** the training draw rate is 21.2%, validation 13.8%.
-  No feature can learn the new format's lower draw rate (`stage` maps the league phase
-  into `group_or_league`, and a format flag would be constant in training), so expect
+  No feature can learn the new format's lower draw rate (the Milestone 7 Pipeline maps the
+  league phase into `group_or_league`, and a format flag would be constant in training), so expect
   draws to be over-predicted on validation and test. The prior baseline already shows it
   (mean p(D) 0.212 vs 0.138). Milestone 8 reports per-class calibration, especially D.
   The Milestone 9 refit, which includes two new-format seasons, partly corrects it.
@@ -307,6 +307,37 @@ in time):
   `evaluate.predict_proba_frame` names columns by `model.classes_` and returns H, D, A;
   `evaluate_probabilities` sorts them before calling scikit-learn. A test pins this
   (the wrong order gave 1.7533 instead of 0.8574 on the hand example).
+
+## Model training (Milestone 7)
+
+### Part A: Pipeline + logistic regression (`train.build_logistic_regression`)
+
+- **Stage groups (`train.STAGE_GROUPS`).** Raw `stage` is not era-stable: training has
+  `group`, validation has `league` and `playoff`. Encoded raw with
+  `handle_unknown="ignore"`, 160 of 189 validation matches would have had all-zero stage
+  columns. Mapping: `group`/`league` -> `group_or_league`; `playoff`/`round_of_16` ->
+  `round_of_16_or_playoff` (first two-legged round, seeded side hosts leg 2);
+  quarter-final, semi-final, final unchanged. An unlisted stage raises.
+- **Preprocessing** (fitted on the 1,494 training matches): form values -> training
+  median (1.4 for all six) -> scaler; first-leg values -> 0 -> scaler; other numeric ->
+  scaler; stage groups and `leg_type` -> one-hot. 25 features -> 32 columns.
+- **Validation (2024-25, 189 matches), C = 1.0:**
+
+  | Model | Log loss | Brier | Accuracy | mean p(D) |
+  |---|---|---|---|---|
+  | logistic regression | 0.9275 | 0.5416 | 0.6243 | 0.201 |
+  | prior | 1.0011 | 0.6042 | 0.5132 | 0.212 |
+
+  Training (in-sample) log loss: 0.9108 (prior 1.0492). Actual validation draw rate
+  0.138; LR predicts D as most likely for 4 of 189 matches (26 were draws).
+- **Uncertainty:** paired bootstrap (5,000 resamples, seed 42) of the per-match log loss
+  difference LR minus prior: -0.0736, 95% interval [-0.1556, +0.0135]. One validation
+  season cannot rule out "no improvement", so Part C uses walk-forward validation to
+  compare models.
+- **Coefficients are not importances:** several signs look backwards on their own
+  (e.g. higher `home_form_points` lowers p(H) given everything else) because form, goals
+  and Elo are strongly correlated; the model splits their shared signal between them.
+- **Comparisons made on validation so far: 1** (LR, C = 1.0).
 
 ## Decisions for later milestones
 
